@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import uuid
 from typing import Any
 
 from config import SimulationConfig
@@ -12,6 +13,7 @@ MAX_SNAPSHOTS = 8
 
 
 def flatten_config(cfg: SimulationConfig) -> dict[str, Any]:
+    """스냅샷·비교용 평탄 dict. 기존 키(`trucks_per_day` 등)는 이전 저장분과 호환을 위해 유지한다."""
     return {
         "sim_days": cfg.sim_days,
         "seed": cfg.random_seed,
@@ -25,11 +27,48 @@ def flatten_config(cfg: SimulationConfig) -> dict[str, Any]:
         "melting_min": cfg.melting.melting_min,
         "flake_ratio": cfg.casting.flake_ratio,
         "outbound_interval_min": cfg.outbound.truck_interval_min,
+        # --- 확장 (엑셀·사이드바 전체 파라미터)
+        "arrival_start_min": cfg.inbound.arrival_start_min,
+        "arrival_end_min": cfg.inbound.arrival_end_min,
+        "morning_cutoff_min": cfg.inbound.morning_cutoff_min,
+        "morning_share": cfg.inbound.morning_share,
+        "inbound_weigh_in_min": cfg.inbound.weigh_in_min,
+        "inbound_weigh_out_min": cfg.inbound.weigh_out_min,
+        "unload_min": cfg.inbound.unload_min,
+        "unloading_bays": cfg.inbound.unloading_bays,
+        "weighbridges": cfg.inbound.weighbridges,
+        "sort_min_per_truck": cfg.sorting.sort_min_per_truck,
+        "subpiles_per_truck": cfg.sorting.subpiles_per_truck,
+        "subpile_ton": cfg.sorting.subpile_ton,
+        "blocks_per_subpile": cfg.sorting.blocks_per_subpile,
+        "block_ton": cfg.sorting.block_ton,
+        "forklift_min_per_block": cfg.sorting.forklift_min_per_block,
+        "press_min_per_block": cfg.sorting.press_min_per_block,
+        "pallet_load_min_per_block": cfg.sorting.pallet_load_min_per_block,
+        "pallet_ton": cfg.melting.pallet_ton,
+        "elevator_count": cfg.melting.elevator_count,
+        "elevator_pallets_per_trip": cfg.melting.elevator_pallets_per_trip,
+        "elevator_cycle_min": cfg.melting.elevator_cycle_min,
+        "setup_min": cfg.melting.setup_min,
+        "flake_unit_ton": cfg.casting.flake_unit_ton,
+        "flake_min_per_unit": cfg.casting.flake_min_per_unit,
+        "scr_unit_ton": cfg.casting.scr_unit_ton,
+        "scr_min_per_unit": cfg.casting.scr_min_per_unit,
+        "holding_setup_min": cfg.casting.holding_setup_min,
+        "flake_buffer_cap": cfg.casting.flake_buffer_cap,
+        "scr_buffer_cap": cfg.casting.scr_buffer_cap,
+        "truck_capacity_ton": cfg.outbound.truck_capacity_ton,
+        "flake_truck_prob": cfg.outbound.flake_truck_prob,
+        "outbound_weigh_in_min": cfg.outbound.weigh_in_min,
+        "outbound_weigh_out_min": cfg.outbound.weigh_out_min,
+        "load_min": cfg.outbound.load_min,
+        "max_wait_min": cfg.outbound.max_wait_min,
     }
 
 
 def snapshot(name: str, cfg: SimulationConfig, analysis: Analysis) -> dict[str, Any]:
     return {
+        "id": uuid.uuid4().hex,
         "name": name,
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "config": flatten_config(cfg),
@@ -67,11 +106,46 @@ CONFIG_LABELS: dict[str, str] = {
     "sorters": "선별기 대수",
     "presses": "압착기 대수",
     "pallet_buffer_cap": "파레트 버퍼 용량",
-    "batch_ton": "배치 톤수 (t)",
+    "batch_ton": "배치 단위 (톤)",
     "furnace_count": "반사로 대수",
     "melting_min": "용해·정련 시간 (분)",
     "flake_ratio": "큐프레이크 비율",
     "outbound_interval_min": "출하 평균 간격 (분)",
+    "arrival_start_min": "입고 창 시작 (분)",
+    "arrival_end_min": "입고 창 종료 (분)",
+    "morning_cutoff_min": "오전·오후 구분 시각 (분)",
+    "morning_share": "오전 입고 비율",
+    "inbound_weigh_in_min": "입고 1차 계근 (분)",
+    "inbound_weigh_out_min": "입고 2차 계근 (분)",
+    "unload_min": "하역 시간 (분/대)",
+    "unloading_bays": "하역 베이 수",
+    "weighbridges": "계근대 수",
+    "sort_min_per_truck": "트럭당 선별 시간 (분)",
+    "subpiles_per_truck": "더미당 sub-pile 수",
+    "subpile_ton": "sub-pile 중량 (t)",
+    "blocks_per_subpile": "sub-pile당 블록 수",
+    "block_ton": "블록 중량 (t)",
+    "forklift_min_per_block": "지게차 투입 (분/블록)",
+    "press_min_per_block": "압착 (분/블록)",
+    "pallet_load_min_per_block": "파레트 적재 (분/블록)",
+    "pallet_ton": "파레트 1개 중량 (t)",
+    "elevator_count": "엘리베이터 대수",
+    "elevator_pallets_per_trip": "엘리베이터 1회 파레트 수",
+    "elevator_cycle_min": "엘리베이터 왕복 (분)",
+    "setup_min": "반사로 셋업·가열 (분)",
+    "flake_unit_ton": "큐프레이크 단위 (t)",
+    "flake_min_per_unit": "큐프레이크 단위당 시간 (분)",
+    "scr_unit_ton": "SCR 단위 (t)",
+    "scr_min_per_unit": "SCR 단위당 시간 (분)",
+    "holding_setup_min": "홀딩로 셋업 (분)",
+    "flake_buffer_cap": "큐프레이크 야적 용량",
+    "scr_buffer_cap": "SCR 야적 용량",
+    "truck_capacity_ton": "출하 트럭 만재 (t)",
+    "flake_truck_prob": "출하 큐프레이크 트럭 확률",
+    "outbound_weigh_in_min": "출하 1차 계근 (분)",
+    "outbound_weigh_out_min": "출하 2차 계근 (분)",
+    "load_min": "출하 상차 시간 (분)",
+    "max_wait_min": "출하 최대 대기 (분)",
 }
 
 

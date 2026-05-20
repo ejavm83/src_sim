@@ -259,6 +259,44 @@ def render_compare_panel(
     )
     _render_compare_readme()
 
+    st.markdown("#### 🏷️ 스냅샷 이름·삭제")
+    st.caption(
+        "각 실행의 **표시 이름**만 바꾸거나 목록에서 뺄 수 있습니다. KPI·설정·차트 값은 "
+        "시뮬레이션 결과 그대로이며 이 화면에서 고칠 수 없습니다."
+    )
+    for i, s in enumerate(saved_runs):
+        sid = str(s.get("id", i))
+        title_key = f"snap_title_{sid}"
+        row_a, row_b, row_c = st.columns([5, 1, 1])
+        with row_a:
+            st.text_input(
+                "제목",
+                value=s["name"],
+                key=title_key,
+                label_visibility="collapsed",
+                placeholder="스냅샷 표시 이름",
+            )
+        with row_b:
+            if st.button("적용", key=f"snap_apply_{sid}", help="입력한 이름을 저장합니다."):
+                new_t = st.session_state.get(title_key, "").strip()
+                if new_t:
+                    saved_runs[i]["name"] = new_t
+                    save_snapshots_to_disk(
+                        saved_runs,
+                        st.session_state.snapshot_idx,
+                    )
+                    st.session_state.pop(title_key, None)
+                st.rerun()
+        with row_c:
+            if st.button("삭제", key=f"snap_del_{sid}"):
+                saved_runs.pop(i)
+                save_snapshots_to_disk(
+                    saved_runs,
+                    st.session_state.snapshot_idx,
+                )
+                st.session_state.pop(title_key, None)
+                st.rerun()
+
     ctl1, ctl2 = st.columns([4, 1])
     with ctl1:
         names = [s["name"] for s in snaps]

@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "snapshot_idx": 3,
+  "snapshot_idx": 6,
   "saved_runs": [
     {
-      "name": "실행 1",
-      "created_at": "2026-05-20T11:29:37",
+      "name": "실행 4",
+      "created_at": "2026-05-20T11:45:12",
       "config": {
         "sim_days": 7,
         "seed": 42,
-        "trucks_per_day": 5,
+        "trucks_per_day": 10,
         "truck_load_ton": 20.0,
         "sorters": 2,
         "presses": 1,
@@ -20,22 +20,22 @@
         "outbound_interval_min": 60.0
       },
       "kpi": {
-        "inbound_trucks": 35,
-        "outbound_trucks": 35,
+        "inbound_trucks": 70,
+        "outbound_trucks": 45,
         "batches_completed": 5,
         "flake_ton": 80.0,
         "scr_ton": 320.0,
         "total_ton": 400.0,
-        "avg_inbound_min": 32.7,
-        "avg_outbound_min": 75.4,
+        "avg_inbound_min": 32.9,
+        "avg_outbound_min": 95.4,
         "avg_batch_min": 1312.5,
-        "aborted_outbound": 107,
+        "aborted_outbound": 108,
         "daily_avg_ton": 57.14
       },
       "utilization": {
-        "weighbridge": 0.06944444444444445,
-        "unloading_bay": 0.034722222222222224,
-        "sorter": 0.052083333333333336,
+        "weighbridge": 0.11408730158730158,
+        "unloading_bay": 0.06944444444444445,
+        "sorter": 0.10416666666666667,
         "press": 0.9396329365079366,
         "elevator": 0.047619047619047616,
         "furnace": 0.24553571428571427,
@@ -45,9 +45,8 @@
       "bottleneck": "press",
       "insights": [
         "압착기 가동률 94.0% — 사실상 풀가동(병목).",
-        "선별기 가동률 5.2% — 유휴, 상위 단계가 흐름을 막고 있을 수 있음.",
         "엘리베이터 가동률 4.8% — 유휴, 상위 단계가 흐름을 막고 있을 수 있음.",
-        "야적 재고 부족으로 출하 트럭 107회 abort — 주조 산출 vs 출하 빈도 균형을 점검하세요."
+        "야적 재고 부족으로 출하 트럭 108회 abort — 주조 산출 vs 출하 빈도 균형을 점검하세요."
       ],
       "recommendations": [
         "압착기 증설 또는 사이클 타임 단축을 검토하세요.",
@@ -73,15 +72,15 @@
       }
     },
     {
-      "name": "실행 2",
-      "created_at": "2026-05-20T11:29:43",
+      "name": "실행 5",
+      "created_at": "2026-05-20T11:45:32",
       "config": {
         "sim_days": 7,
         "seed": 42,
-        "trucks_per_day": 13,
+        "trucks_per_day": 5,
         "truck_load_ton": 20.0,
         "sorters": 2,
-        "presses": 1,
+        "presses": 2,
         "pallet_buffer_cap": 160,
         "batch_ton": 80.0,
         "furnace_count": 2,
@@ -90,50 +89,53 @@
         "outbound_interval_min": 60.0
       },
       "kpi": {
-        "inbound_trucks": 91,
-        "outbound_trucks": 43,
-        "batches_completed": 5,
-        "flake_ton": 80.0,
-        "scr_ton": 320.0,
-        "total_ton": 400.0,
-        "avg_inbound_min": 34.3,
-        "avg_outbound_min": 91.2,
-        "avg_batch_min": 1312.5,
-        "aborted_outbound": 109,
-        "daily_avg_ton": 57.14
+        "inbound_trucks": 35,
+        "outbound_trucks": 52,
+        "batches_completed": 7,
+        "flake_ton": 112.0,
+        "scr_ton": 448.0,
+        "total_ton": 560.0,
+        "avg_inbound_min": 32.8,
+        "avg_outbound_min": 79.2,
+        "avg_batch_min": 1320.0,
+        "aborted_outbound": 90,
+        "daily_avg_ton": 80.0
       },
       "utilization": {
-        "weighbridge": 0.13293650793650794,
-        "unloading_bay": 0.09027777777777778,
-        "sorter": 0.13541666666666666,
-        "press": 0.9396329365079366,
-        "elevator": 0.047619047619047616,
-        "furnace": 0.24553571428571427,
-        "flake_line": 0.02460317460317457,
-        "scr_line": 0.0992063492063492
+        "weighbridge": 0.08630952380952381,
+        "unloading_bay": 0.034722222222222224,
+        "sorter": 0.052083333333333336,
+        "press": 0.6484126984126984,
+        "elevator": 0.06349206349206349,
+        "furnace": 0.34970238095238093,
+        "flake_line": 0.03444444444444448,
+        "scr_line": 0.1388888888888889
       },
       "bottleneck": "press",
       "insights": [
-        "압착기 가동률 94.0% — 사실상 풀가동(병목).",
-        "엘리베이터 가동률 4.8% — 유휴, 상위 단계가 흐름을 막고 있을 수 있음.",
-        "야적 재고 부족으로 출하 트럭 109회 abort — 주조 산출 vs 출하 빈도 균형을 점검하세요."
+        "엘리베이터 가동률 6.3% — 유휴, 상위 단계가 흐름을 막고 있을 수 있음.",
+        "선별기 가동률 5.2% — 유휴, 상위 단계가 흐름을 막고 있을 수 있음.",
+        "야적 재고 부족으로 출하 트럭 90회 abort — 주조 산출 vs 출하 빈도 균형을 점검하세요."
       ],
       "recommendations": [
-        "압착기 증설 또는 사이클 타임 단축을 검토하세요.",
         "출하 간격을 늘리거나 주조 비율·반사로 가동을 늘려 재고 안정화."
       ],
       "daily_production": {
-        "3": {
+        "2": {
           "flake": 32.0,
           "scr": 128.0
         },
-        "4": {
+        "3": {
           "flake": 16.0,
           "scr": 64.0
         },
+        "4": {
+          "flake": 32.0,
+          "scr": 116.0
+        },
         "5": {
-          "flake": 16.0,
-          "scr": 64.0
+          "scr": 76.0,
+          "flake": 16.0
         },
         "6": {
           "flake": 16.0,

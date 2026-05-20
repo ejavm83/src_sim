@@ -28,7 +28,7 @@ def run_simulation(cfg: SimulationConfig, progress: ProgressFn | None = None) ->
     press_queue: simpy.Store = simpy.Store(env)
     presses = simpy.Resource(env, capacity=cfg.sorting.presses)
     pallet_buffer: simpy.Store = simpy.Store(env, capacity=cfg.sorting.pallet_buffer_cap)
-    elevator = simpy.Resource(env, capacity=1)
+    elevator = simpy.Resource(env, capacity=max(1, cfg.melting.elevator_count))
     furnaces = simpy.Resource(env, capacity=cfg.melting.furnace_count)
     flake_line = simpy.Resource(env, capacity=1)
     scr_line = simpy.Resource(env, capacity=1)
@@ -40,7 +40,7 @@ def run_simulation(cfg: SimulationConfig, progress: ProgressFn | None = None) ->
         "unloading_bay": cfg.inbound.unloading_bays,
         "sorter": cfg.sorting.sorters,
         "press": cfg.sorting.presses,
-        "elevator": 1,
+        "elevator": max(1, cfg.melting.elevator_count),
         "furnace": cfg.melting.furnace_count,
         "flake_line": 1,
         "scr_line": 1,

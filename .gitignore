@@ -8,3 +8,6 @@ __pycache__/
 dist/
 build/
 local_settings.json
+
+# MS Office / Excel 임시 잠금 파일
+~$*

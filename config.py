@@ -46,6 +46,7 @@ class MeltingConfig:
     setup_min: float = 120.0
     melting_min: float = 780.0
     furnace_count: int = 2
+    elevator_count: int = 1
 
     @property
     def pallets_per_batch(self) -> int:
@@ -59,7 +60,7 @@ class CastingConfig:
     flake_min_per_unit: float = 3.1
     scr_unit_ton: float = 4.0
     scr_min_per_unit: float = 12.5
-    holding_setup_min: float = 90.0
+    holding_setup_min: float = 60.0
     flake_buffer_cap: int = 100
     scr_buffer_cap: int = 75
 
@@ -71,7 +72,7 @@ class OutboundConfig:
     flake_truck_prob: float = 0.20
     weigh_in_min: float = 5.0
     weigh_out_min: float = 5.0
-    load_min: float = 20.0
+    load_min: float = 12.0
     max_wait_min: float = 240.0
 
 
@@ -90,4 +91,13 @@ class SimulationConfig:
         return self.sim_days * 24 * 60
 
 
-DEFAULT_CONFIG = SimulationConfig()
+def _default_config() -> SimulationConfig:
+    try:
+        from excel_config import load_simulation_config_from_excel
+
+        return load_simulation_config_from_excel()
+    except Exception:
+        return SimulationConfig()
+
+
+DEFAULT_CONFIG = _default_config()

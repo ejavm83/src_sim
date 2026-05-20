@@ -273,6 +273,13 @@ PARAM_SPECS: list[ParamSpec] = [
     ),
     ParamSpec(
         "③ 장입 / 용해",
+        "엘리베이터 대수",
+        "대",
+        "병렬 엘리베이터 자원 용량.",
+        lambda c: c.melting.elevator_count,
+    ),
+    ParamSpec(
+        "③ 장입 / 용해",
         "배치 사전 준비",
         "분",
         "장입 후 용해 전 셋업.",
@@ -505,6 +512,16 @@ def parameters_dataframe(
     return pd.DataFrame(rows)
 
 
+_UI_TABLE_SKIP_LABELS = frozenset(
+    {
+        "시뮬레이션 총 시간",
+        "배치당 파레트 수",
+        "블록 1사이클 합계",
+    }
+)
+
+
 def adjustable_parameters(cfg: SimulationConfig | None = None) -> pd.DataFrame:
+    """사이드바에서 조정하는 항목과 동일하게, 파생·읽기 전용 몇 항목만 제외한다."""
     df = parameters_dataframe(cfg)
-    return df[df["UI 조정"] == "✓"].reset_index(drop=True)
+    return df[~df["파라미터"].isin(_UI_TABLE_SKIP_LABELS)].reset_index(drop=True)

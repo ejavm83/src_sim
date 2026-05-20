@@ -9,20 +9,13 @@ import time
 
 import streamlit as st
 
-from config import (
-    DEFAULT_CONFIG,
-    CastingConfig,
-    InboundConfig,
-    MeltingConfig,
-    OutboundConfig,
-    SimulationConfig,
-    SortingConfig,
-)
-from report import analyze
+from config import DEFAULT_CONFIG, SimulationConfig
+from report import Analysis, analyze
 from run_compare import MAX_SNAPSHOTS, flatten_config, snapshot
 from simulation import run_simulation
 from ui.compare_panel import render_compare_panel
 from ui.results import render_results
+from ui.sidebar_params import render_config_sidebar
 from ui.snapshot_store import load_saved_snapshots, save_snapshots_to_disk
 from views import parameter_reference, process_guide
 
@@ -42,27 +35,55 @@ if "saved_runs" not in st.session_state:
 if "snap_name" not in st.session_state:
     st.session_state.snap_name = f"실행 {st.session_state.snapshot_idx}"
 
-# 시뮬 완료 후 다음 rerun에서만 탭 키를 쓰기 위해 사용(Streamlit은 위젯 생성 이후 해당 key의 session_state를 같은 런에서 수정할 수 없음)
+# 탭 위젯은 본문에서 먼저 만들어지므로, 같은 런의 사이드바 등에서는 이 플래그만 세우고 다음 rerun 초기에
+# `MAIN_TABS_WIDGET_KEY`를 설정한다(Streamlit은 위젯 생성 이후 해당 key의 session_state를 같은 런에서 수정할 수 없음).
 _FOCUS_SIM_TAB_AFTER_RUN = "_focus_sim_tab_after_run"
+# snap_name 텍스트 입력은 사이드바에서 먼저 만들어지므로, 같은 런에서 snap_name을 바꾸면 예외가 난다. 다음 런 초기에 반영한다.
+_PENDING_SNAP_NAME = "_pending_snap_name"
+_pending_default_title = st.session_state.pop(_PENDING_SNAP_NAME, None)
+if _pending_default_title is not None:
+    st.session_state.snap_name = _pending_default_title
+
+# 앱 버전(사이드바 상단 표기)
+APP_VERSION_INFO = "v0.1.0 (2026.05.20)"
+
+# 탭 라벨·세션 키(사이드바 홈에서 시뮬 탭으로 이동할 때도 동일 키 사용)
+MAIN_TABS_KEY = "main_tabs"
+MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v2"
+TAB_SIM_LABEL = "🏭 시뮬레이션"
+_tab_labels = [
+    TAB_SIM_LABEL,
+    "🆚 스냅샷 비교",
+    "📖 공정 설명",
+    "📋 파라미터·단위",
+]
 
 
-def save_snapshot() -> None:
-    run = st.session_state.last_run
-    if run is None:
-        return
-    snap = snapshot(
-        st.session_state.snap_name.strip() or f"실행 {st.session_state.snapshot_idx}",
-        run["cfg"],
-        run["analysis"],
-    )
+def persist_run_snapshot(cfg: SimulationConfig, analysis: Analysis) -> None:
+    """시뮬 완료 직후 자동 저장. 동일 설정(평탄화된 config)이 이미 있으면 결과만 갱신하고 표시 이름·id는 유지한다."""
+    flat = flatten_config(cfg)
     saved = st.session_state.saved_runs
+    display_name = st.session_state.snap_name.strip() or f"실행 {st.session_state.snapshot_idx}"
+    new_snap = snapshot(display_name, cfg, analysis)
+    for i, s in enumerate(saved):
+        if s.get("config") == flat:
+            new_snap["name"] = s["name"]
+            if s.get("id"):
+                new_snap["id"] = s["id"]
+            saved[i] = new_snap
+            st.session_state._save_toast = (
+                f"스냅샷 '{new_snap['name']}' 동일 설정으로 자동 갱신됨 ({len(saved)}/{MAX_SNAPSHOTS})"
+            )
+            save_snapshots_to_disk(saved, st.session_state.snapshot_idx)
+            return
+
     if len(saved) >= MAX_SNAPSHOTS:
         saved.pop(0)
-    saved.append(snap)
+    saved.append(new_snap)
     st.session_state.snapshot_idx += 1
-    st.session_state.snap_name = f"실행 {st.session_state.snapshot_idx}"
+    st.session_state[_PENDING_SNAP_NAME] = f"실행 {st.session_state.snapshot_idx}"
     st.session_state._save_toast = (
-        f"스냅샷 '{snap['name']}' 저장됨 ({len(saved)}/{MAX_SNAPSHOTS})"
+        f"스냅샷 '{new_snap['name']}' 자동 저장됨 ({len(saved)}/{MAX_SNAPSHOTS})"
     )
     save_snapshots_to_disk(saved, st.session_state.snapshot_idx)
 
@@ -80,17 +101,7 @@ with st.expander("🧩 기술 구성 요약", expanded=False):
         "- **Streamlit·Plotly·Pandas** — 웹 UI·차트·표 처리."
     )
 
-# 탭 라벨·세션 키: 시뮬 완료 후 결과가 보이는 탭으로 포커스 이동
-MAIN_TABS_KEY = "main_tabs"
-MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v2"
-TAB_SIM_LABEL = "🏭 시뮬레이션"
-_tab_labels = [
-    TAB_SIM_LABEL,
-    "🆚 스냅샷 비교",
-    "📖 공정 설명",
-    "📋 파라미터·단위",
-]
-
+# 시뮬 완료·🏠 홈 등: 다음 rerun 직후·`st.tabs` 이전에 시뮬 탭으로 포커스
 if st.session_state.pop(_FOCUS_SIM_TAB_AFTER_RUN, False):
     st.session_state[MAIN_TABS_WIDGET_KEY] = TAB_SIM_LABEL
 
@@ -110,110 +121,46 @@ _i += 1
 tab_params = _tab_ctxs[_i]
 
 
-def build_config(
-    sim_days: int,
-    trucks_per_day: int,
-    truck_load_ton: float,
-    sorters: int,
-    presses: int,
-    pallet_cap: int,
-    furnace_count: int,
-    melting_min: int,
-    flake_ratio: float,
-    out_interval: int,
-) -> SimulationConfig:
-    return SimulationConfig(
-        sim_days=sim_days,
-        random_seed=DEFAULT_CONFIG.random_seed,
-        inbound=InboundConfig(
-            trucks_per_day=trucks_per_day,
-            truck_load_ton=truck_load_ton,
-        ),
-        sorting=SortingConfig(
-            sorters=sorters,
-            presses=presses,
-            pallet_buffer_cap=pallet_cap,
-        ),
-        melting=MeltingConfig(
-            furnace_count=furnace_count,
-            melting_min=float(melting_min),
-        ),
-        casting=CastingConfig(flake_ratio=float(flake_ratio)),
-        outbound=OutboundConfig(truck_interval_min=float(out_interval)),
-    )
-
-
 with st.sidebar:
+    _sb_home, _sb_ver = st.columns([1, 1.15], gap="small")
+    with _sb_home:
+        if st.button(
+            "🏠 홈",
+            use_container_width=True,
+            help="시뮬레이션 탭(초기 메인 화면)으로 이동합니다.",
+            key="nav_home_sidebar",
+        ):
+            st.session_state[_FOCUS_SIM_TAB_AFTER_RUN] = True
+            st.rerun()
+    with _sb_ver:
+        st.caption(APP_VERSION_INFO)
+    st.divider()
     st.header("⚙️ 시뮬레이션 파라미터")
+    try:
+        from excel_config import default_excel_path
 
-    sim_days = st.slider(
-        "시뮬레이션 일수", 1, 30, DEFAULT_CONFIG.sim_days,
-        help="가상 시간 = sim_days × 24시간",
-    )
+        st.caption(f"기본값 파일: `{default_excel_path().name}` (`data/`)")
+    except Exception:
+        st.caption("기본값: 코드 내장( `data` 에 `.xlsx` 없음 )")
 
-    with st.expander("① 입고 / 하역", expanded=False):
-        trucks_per_day = st.slider(
-            "일 트럭 수", 1, 40, DEFAULT_CONFIG.inbound.trucks_per_day
-        )
-        truck_load_ton = st.slider(
-            "트럭 적재 (t)", 5.0, 30.0, DEFAULT_CONFIG.inbound.truck_load_ton, 0.5
-        )
-
-    with st.expander("② 선별 / 압착", expanded=False):
-        sorters = st.slider("선별기 대수", 1, 5, DEFAULT_CONFIG.sorting.sorters)
-        presses = st.slider("압착기 대수", 1, 5, DEFAULT_CONFIG.sorting.presses)
-        pallet_cap = st.slider(
-            "파레트 버퍼 용량", 40, 320, DEFAULT_CONFIG.sorting.pallet_buffer_cap, 20
-        )
-
-    with st.expander("③ 용해 / 주조", expanded=False):
-        furnace_count = st.slider(
-            "반사로 대수", 1, 4, DEFAULT_CONFIG.melting.furnace_count
-        )
-        melting_min = st.slider(
-            "용해·정련 시간 (분)", 300, 1200, int(DEFAULT_CONFIG.melting.melting_min), 30
-        )
-        flake_ratio = st.slider(
-            "큐프레이크 비율", 0.0, 1.0, DEFAULT_CONFIG.casting.flake_ratio, 0.05
-        )
-
-    with st.expander("④ 출하", expanded=False):
-        out_interval = st.slider(
-            "출하 평균 간격 (분)", 15, 240, int(DEFAULT_CONFIG.outbound.truck_interval_min), 5
-        )
+    cfg = render_config_sidebar(DEFAULT_CONFIG)
 
     run_btn = st.button("🚀 시뮬레이션 실행", type="primary", use_container_width=True)
 
     st.divider()
     st.markdown("**💾 결과 스냅샷**")
+    st.caption(
+        "실행이 끝나면 자동으로 저장됩니다. 같은 설정으로 다시 돌리면 **이미 있는 항목의 결과만 갱신**되고 "
+        "이름은 그대로 둡니다. 이름 바꾸기·삭제는 **🆚 스냅샷 비교** 탭 상단에서 할 수 있습니다."
+    )
     st.text_input(
-        "스냅샷 이름",
+        "다음 실행 시 저장될 제목",
         key="snap_name",
         label_visibility="collapsed",
-    )
-    can_save = st.session_state.last_run is not None
-    if can_save:
-        current_cfg = flatten_config(st.session_state.last_run["cfg"])
-        for saved in st.session_state.saved_runs:
-            if current_cfg == saved["config"]:
-                can_save = False
-                break
-
-    st.button(
-        "이번 결과 저장",
-        use_container_width=True,
-        disabled=not can_save,
-        on_click=save_snapshot,
     )
 
 if st.session_state.get("_save_toast"):
     st.toast(st.session_state.pop("_save_toast"), icon="💾")
-
-cfg = build_config(
-    sim_days, trucks_per_day, truck_load_ton,
-    sorters, presses, pallet_cap,
-    furnace_count, melting_min, flake_ratio, out_interval,
-)
 
 if run_btn:
     progress_bar = st.progress(0.0, text="시뮬레이션 준비 중...")
@@ -237,6 +184,7 @@ if run_btn:
         "analysis": analysis,
         "elapsed_s": elapsed,
     }
+    persist_run_snapshot(cfg, analysis)
     st.session_state[_FOCUS_SIM_TAB_AFTER_RUN] = True
     st.success(
         f"✅ 시뮬레이션 완료 — 실측 {elapsed:.2f}초 · 이벤트 {len(metrics.events):,}건"
@@ -275,13 +223,12 @@ with tab_compare:
     st.markdown(
         "저장해 둔 실행 스냅샷끼리 **KPI·파라미터·자원 가동률·일별 생산 추이**를 한 화면에서 비교합니다. "
         "각 블록 아래에는 **무엇이 달라졌는지(비교 요약)**와 **그 결과가 의미하는 바(시사점)**를 따로 적어 두었습니다. "
-        "새 스냅샷을 쌓으려면 **🏭 시뮬레이션** 탭에서 실행한 뒤 사이드바 **이번 결과 저장**을 사용하세요."
+        "새 스냅샷은 **🏭 시뮬레이션** 탭에서 실행할 때마다 **자동 저장**됩니다."
     )
     if st.session_state.saved_runs:
         render_compare_panel(st.session_state.saved_runs, expanded=True)
     else:
         st.info(
-            "아직 저장된 스냅샷이 없습니다. 시뮬레이션을 실행한 뒤 사이드바에서 "
-            "**이번 결과 저장**으로 스냅샷을 추가하세요."
+            "아직 저장된 스냅샷이 없습니다. **🏭 시뮬레이션** 탭에서 한 번 실행하면 자동으로 첫 스냅샷이 쌓입니다."
         )
 

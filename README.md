@@ -11,6 +11,11 @@ streamlit run webapp.py
 
 Windows에서는 `run_web.bat`을 실행해도 됩니다.
 
+## 공정 기본값 (Excel)
+
+`data/` 폴더에 `.xlsx` 공정 설정 파일이 있으면(예: `공정설정값260520.xlsx`), 앱 기동 시 **「설비·공정 확인」** 시트의 **시뮬 현재값** 열을 읽어 `SimulationConfig` 기본값으로 씁니다.  
+파일이 없거나 읽기에 실패하면 `config.py`의 내장 기본값으로 폴백합니다. 사이드바에서 모든 주요 수치를 다시 조정할 수 있습니다.
+
 ## Vercel에 대해
 
 **이 저장소는 Streamlit 앱이라 Vercel에 그대로 배포할 수 없습니다.**  
