@@ -1,4 +1,4 @@
-"""군산 SCR 공정 시뮬레이션 — Streamlit 대시보드.
+"""한국미래소재 공정 시뮬레이션 — Streamlit 대시보드.
 
 실행: `streamlit run webapp.py`
 """
@@ -8,6 +8,7 @@ from __future__ import annotations
 import time
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from config import DEFAULT_CONFIG, SimulationConfig
 from report import Analysis, analyze
@@ -21,7 +22,7 @@ from views import parameter_reference, process_guide
 
 
 st.set_page_config(
-    page_title="군산 SCR 공정 시뮬레이션",
+    page_title="한국미래소재 공정 시뮬레이션",
     page_icon="🏭",
     layout="wide",
 )
@@ -45,9 +46,9 @@ if _pending_default_title is not None:
     st.session_state.snap_name = _pending_default_title
 
 # 앱 버전(사이드바 상단 표기)
-APP_VERSION_INFO = "v0.1.0 (2026.05.20)"
+APP_VERSION_INFO = "v0.1.1 (2026.05.20)"
 
-# 탭 라벨·세션 키(사이드바 홈에서 시뮬 탭으로 이동할 때도 동일 키 사용)
+# 탭 라벨·세션 키(시뮬 완료 후 시뮬 탭으로 포커스할 때 사용)
 MAIN_TABS_KEY = "main_tabs"
 MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v2"
 TAB_SIM_LABEL = "🏭 시뮬레이션"
@@ -88,7 +89,7 @@ def persist_run_snapshot(cfg: SimulationConfig, analysis: Analysis) -> None:
     save_snapshots_to_disk(saved, st.session_state.snapshot_idx)
 
 
-st.title("🏭 군산 SCR 공정 물류 시뮬레이션")
+st.title("🏭 한국미래소재 공정 물류 시뮬레이션")
 st.caption(
     "스크랩 구리 입고 → 선별/압착 → 장입/용해 → 하이브리드 주조 → 출하의 5단계 공정을 "
     "SimPy 이산사건 시뮬레이션으로 분석합니다."
@@ -101,7 +102,7 @@ with st.expander("🧩 기술 구성 요약", expanded=False):
         "- **Streamlit·Plotly·Pandas** — 웹 UI·차트·표 처리."
     )
 
-# 시뮬 완료·🏠 홈 등: 다음 rerun 직후·`st.tabs` 이전에 시뮬 탭으로 포커스
+# 시뮬 완료 등: 다음 rerun 직후·`st.tabs` 이전에 시뮬 탭으로 포커스
 if st.session_state.pop(_FOCUS_SIM_TAB_AFTER_RUN, False):
     st.session_state[MAIN_TABS_WIDGET_KEY] = TAB_SIM_LABEL
 
@@ -127,11 +128,15 @@ with st.sidebar:
         if st.button(
             "🏠 홈",
             use_container_width=True,
-            help="시뮬레이션 탭(초기 메인 화면)으로 이동합니다.",
+            help="브라우저 새로고침(F5)과 같습니다. 페이지·세션 상태가 처음부터 다시 로드됩니다.",
             key="nav_home_sidebar",
         ):
-            st.session_state[_FOCUS_SIM_TAB_AFTER_RUN] = True
-            st.rerun()
+            # st.rerun()은 세션을 유지하므로, F5와 동일한 효과는 부모 창 전체 reload가 필요함
+            components.html(
+                "<script>window.parent.location.reload();</script>",
+                height=0,
+                width=0,
+            )
     with _sb_ver:
         st.caption(APP_VERSION_INFO)
     st.divider()

@@ -1,4 +1,4 @@
-# 군산 SCR 공정 물류 시뮬레이션 (Streamlit)
+# 한국미래소재 공정 물류 시뮬레이션 (Streamlit)
 
 SimPy 기반 이산사건 시뮬레이션과 Streamlit 대시보드입니다.
 
