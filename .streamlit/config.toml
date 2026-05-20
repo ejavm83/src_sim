@@ -1,0 +1,6 @@
+# 컨테이너·클라우드(Streamlit Community Cloud 등)에서 headless 실행 시 기본값
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false

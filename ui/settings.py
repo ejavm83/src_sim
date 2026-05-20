@@ -4,14 +4,37 @@ import streamlit as st
 
 SETTINGS_FILE = "local_settings.json"
 
+
+def _merge_cloud_overrides(data: dict) -> None:
+    """배포 환경: 환경 변수·Streamlit Secrets가 있으면 API 키 등을 덮어쓴다(로컬 JSON보다 우선)."""
+    env_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if env_key:
+        data["gemini_api_key"] = env_key
+    env_name = os.environ.get("GEMINI_DISPLAY_NAME", "").strip()
+    if env_name:
+        data["display_name"] = env_name
+    try:
+        sec = st.secrets
+        if "GEMINI_API_KEY" in sec:
+            data["gemini_api_key"] = str(sec["GEMINI_API_KEY"]).strip()
+        if "display_name" in sec:
+            data["display_name"] = str(sec["display_name"]).strip()
+    except Exception:
+        pass
+
+
 def load_settings() -> dict:
+    data: dict = {}
     if os.path.exists(SETTINGS_FILE):
         try:
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                raw = json.load(f)
+                if isinstance(raw, dict):
+                    data = raw
         except Exception:
-            return {}
-    return {}
+            data = {}
+    _merge_cloud_overrides(data)
+    return data
 
 def save_settings(settings: dict) -> None:
     try:
