@@ -23,9 +23,6 @@ from run_compare import MAX_SNAPSHOTS, flatten_config, snapshot
 from simulation import run_simulation
 from ui.compare_panel import render_compare_panel
 from ui.results import render_results
-from ui.admin_ai import ADMIN_AI_QUERY_KEY, admin_ai_menus_visible, render_admin_ai_hotkey_listener
-from ui.chatbot import render_chatbot
-from ui.settings import render_settings, get_api_key
 from ui.snapshot_store import load_saved_snapshots, save_snapshots_to_disk
 from views import parameter_reference, process_guide
 
@@ -36,9 +33,6 @@ st.set_page_config(
     layout="wide",
 )
 
-render_admin_ai_hotkey_listener()
-_show_admin_ai = admin_ai_menus_visible()
-
 if "last_run" not in st.session_state:
     st.session_state.last_run = None
 if "saved_runs" not in st.session_state:
@@ -47,6 +41,9 @@ if "saved_runs" not in st.session_state:
     st.session_state.snapshot_idx = loaded_idx
 if "snap_name" not in st.session_state:
     st.session_state.snap_name = f"실행 {st.session_state.snapshot_idx}"
+
+# 시뮬 완료 후 다음 rerun에서만 탭 키를 쓰기 위해 사용(Streamlit은 위젯 생성 이후 해당 key의 session_state를 같은 런에서 수정할 수 없음)
+_FOCUS_SIM_TAB_AFTER_RUN = "_focus_sim_tab_after_run"
 
 
 def save_snapshot() -> None:
@@ -75,17 +72,17 @@ st.caption(
     "스크랩 구리 입고 → 선별/압착 → 장입/용해 → 하이브리드 주조 → 출하의 5단계 공정을 "
     "SimPy 이산사건 시뮬레이션으로 분석합니다."
 )
-if not _show_admin_ai:
-    st.caption(
-        f"🤖 **AI 챗봇·API 설정**은 관리자 메뉴입니다. 표시하려면 **Shift+F12**를 누르세요. "
-        f"(비활성화도 동일 단축키 · 또는 주소에 `?{ADMIN_AI_QUERY_KEY}=1` 추가)"
+with st.expander("🧩 기술 구성 요약", expanded=False):
+    st.markdown(
+        "- **SimPy** — 5단계 공정의 **이산사건 시뮬** 본체(설비·버퍼·대기열).\n"
+        "- **OR-Tools CP-SAT** — 결과 탭 **고급 분석**에서 반사로 **FIFO 실측**과 "
+        "**이론상 최적 makespan**만 비교(전 공정을 대체하지 않음).\n"
+        "- **Streamlit·Plotly·Pandas** — 웹 UI·차트·표 처리."
     )
-else:
-    st.caption("🤖 관리자 메뉴 활성: **Shift+F12**로 AI 탭·설정을 다시 숨길 수 있습니다.")
 
 # 탭 라벨·세션 키: 시뮬 완료 후 결과가 보이는 탭으로 포커스 이동
 MAIN_TABS_KEY = "main_tabs"
-MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_{'ai' if _show_admin_ai else 'std'}"
+MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v2"
 TAB_SIM_LABEL = "🏭 시뮬레이션"
 _tab_labels = [
     TAB_SIM_LABEL,
@@ -93,9 +90,9 @@ _tab_labels = [
     "📖 공정 설명",
     "📋 파라미터·단위",
 ]
-if _show_admin_ai:
-    _tab_labels.append("🤖 AI 분석")
-_tab_labels.append("⚙️ 환경 설정")
+
+if st.session_state.pop(_FOCUS_SIM_TAB_AFTER_RUN, False):
+    st.session_state[MAIN_TABS_WIDGET_KEY] = TAB_SIM_LABEL
 
 _tab_ctxs = st.tabs(
     _tab_labels,
@@ -111,13 +108,6 @@ _i += 1
 tab_process = _tab_ctxs[_i]
 _i += 1
 tab_params = _tab_ctxs[_i]
-_i += 1
-if _show_admin_ai:
-    tab_ai = _tab_ctxs[_i]
-    _i += 1
-else:
-    tab_ai = None
-tab_settings = _tab_ctxs[_i]
 
 
 def build_config(
@@ -247,7 +237,7 @@ if run_btn:
         "analysis": analysis,
         "elapsed_s": elapsed,
     }
-    st.session_state[MAIN_TABS_WIDGET_KEY] = TAB_SIM_LABEL
+    st.session_state[_FOCUS_SIM_TAB_AFTER_RUN] = True
     st.success(
         f"✅ 시뮬레이션 완료 — 실측 {elapsed:.2f}초 · 이벤트 {len(metrics.events):,}건"
     )
@@ -295,9 +285,3 @@ with tab_compare:
             "**이번 결과 저장**으로 스냅샷을 추가하세요."
         )
 
-if tab_ai is not None:
-    with tab_ai:
-        render_chatbot(st.session_state.last_run, get_api_key())
-
-with tab_settings:
-    render_settings(show_ai_section=_show_admin_ai)
