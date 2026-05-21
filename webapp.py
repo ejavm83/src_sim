@@ -1,4 +1,4 @@
-"""한국미래소재 공정 시뮬레이션 — Streamlit 대시보드.
+"""A 공정 시뮬레이션 — Streamlit 대시보드.
 
 실행: `streamlit run webapp.py`
 """
@@ -27,7 +27,7 @@ def _default_snapshot_display_name(snapshot_idx: int) -> str:
 
 
 st.set_page_config(
-    page_title="한국미래소재 공정 시뮬레이션",
+    page_title="A 공정 시뮬레이션",
     page_icon="🏭",
     layout="wide",
 )
@@ -63,7 +63,7 @@ if _pending_default_title is not None:
     st.session_state.snap_name = _pending_default_title
 
 # 앱 버전(사이드바 상단 표기)
-APP_VERSION_INFO = "v0.1.3 (2026.05.21)"
+APP_VERSION_INFO = "v0.1.4 (2026.05.21)"
 
 # 탭 라벨·세션 키(시뮬 완료 후 시뮬 탭으로 포커스할 때 사용)
 MAIN_TABS_KEY = "main_tabs"
@@ -110,7 +110,7 @@ def persist_run_snapshot(cfg: SimulationConfig, analysis: Analysis) -> None:
     save_snapshots_to_disk(saved, st.session_state.snapshot_idx)
 
 
-st.title("🏭 한국미래소재 공정 물류 시뮬레이션")
+st.title("🏭 A 공정 물류 시뮬레이션")
 st.caption(
     "스크랩 구리 입고 → 선별/압착 → 장입/용해 → 하이브리드 주조 → 출하의 5단계 공정을 "
     "SimPy 이산사건 시뮬레이션으로 분석합니다. "
