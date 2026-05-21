@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
+from views.display_sanitize import sanitize_display_text
+
 # 원문과 동일한 톤(주황·굵게) — 표시 전용, 파일에는 저장하지 않음
 _METRIC_SPAN = '<span style="color:#b45309;font-weight:700">{}</span>'
 
@@ -94,6 +96,7 @@ def _apply_spans(text: str, intervals: list[tuple[int, int]]) -> str:
 
 def markdown_for_preview(md: str) -> str:
     """저장 형식 그대로인 마크다운에, 미리보기용 인라인 강조만 덧씌웁니다."""
+    md = sanitize_display_text(md)
     head, body = _split_frontmatter(md)
     intervals = _intervals_for_patterns(body, _HIGHLIGHT_PATTERNS)
     return head + _apply_spans(body, intervals)

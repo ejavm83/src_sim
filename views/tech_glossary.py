@@ -7,6 +7,8 @@ from typing import Tuple
 
 import streamlit as st
 
+from views.display_sanitize import sanitize_display_text
+
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _CANONICAL_PROCESS_DOC = _PROJECT_ROOT / "data" / "공정설명260521.md"
 _WEB_TERMS_SECTION_START = "# 웹·대시보드에서 쓰는 용어 약어"
@@ -98,4 +100,5 @@ def render() -> None:
     st.header("🔤 용어·약어")
 
     _from_doc = load_web_terminology_markdown()
-    st.markdown(_from_doc if _from_doc else _WEB_ABBREV_FALLBACK_MD)
+    _md = _from_doc if _from_doc else _WEB_ABBREV_FALLBACK_MD
+    st.markdown(sanitize_display_text(_md))
