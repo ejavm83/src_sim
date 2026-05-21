@@ -6,6 +6,8 @@ from pathlib import Path
 
 import streamlit as st
 
+from views.process_doc_highlight import markdown_for_preview
+
 # 프로젝트 루트 기준 공정 설명 문서
 PROCESS_DOC_PATH = Path(__file__).resolve().parent.parent / "data" / "공정설명260521.md"
 _SESSION_DRAFT_KEY = "process_description_md_draft"
@@ -45,7 +47,8 @@ def render() -> None:
     st.header("📄 공정 설명 문서")
     st.caption(
         f"파일: `{PROCESS_DOC_PATH.relative_to(PROCESS_DOC_PATH.parent.parent)}` — "
-        "기본은 읽기 전용입니다. **편집**으로 수정하거나, 아래에서 **.md 파일**을 가져오기/보내기 할 수 있습니다."
+        "기본은 읽기 전용입니다. **편집**으로 수정하거나, 아래에서 **.md 파일**을 가져오기/보내기 할 수 있습니다. "
+        "읽기 화면에서는 숫자·단위만 자동 강조되며, 파일에는 HTML 태그를 넣지 않아도 됩니다."
     )
 
     if not PROCESS_DOC_PATH.is_file():
@@ -103,7 +106,7 @@ def render() -> None:
         )
         c1, c2, c3 = st.columns([1, 1, 1])
         with c1:
-            if st.button("디스크에서 다시 읽기", help="저장하지 않은 편집 내용은 버려집니다."):
+            if st.button("초기화", help="저장하지 않은 편집 내용은 버려집니다."):
                 st.session_state[_RELOAD_FROM_DISK_FLAG] = True
                 st.rerun()
         with c2:
@@ -115,7 +118,7 @@ def render() -> None:
     else:
         body = _load_text()
         if body.strip():
-            st.markdown(body, unsafe_allow_html=True)
+            st.markdown(markdown_for_preview(body), unsafe_allow_html=True)
         else:
             st.info("파일이 비어 있거나 없습니다. **편집**을 눌러 내용을 작성하세요.")
         _, btn_col = st.columns([4, 1])
