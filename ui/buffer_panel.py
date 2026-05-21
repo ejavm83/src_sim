@@ -83,6 +83,8 @@ def render_buffer_panel(
         yaxis=dict(range=[0, 110], title="점유율 (%)"),
         xaxis_title="경과 (일)",
         legend_title=None,
-        margin=dict(t=10, b=10, l=10, r=10),
+        # 우측 임계선 주석과 겹치지 않도록 범례는 좌상단, 오른쪽 여백 확보
+        legend=dict(x=0.02, y=0.98, xanchor="left", yanchor="top"),
+        margin=dict(t=10, b=10, l=10, r=100),
     )
     st.plotly_chart(fig, use_container_width=True)

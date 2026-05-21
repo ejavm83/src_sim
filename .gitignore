@@ -11,3 +11,6 @@ local_settings.json
 
 # MS Office / Excel 임시 잠금 파일
 ~$*
+
+# 공정 문서 로컬 백업(타임스탬프 .md) — 저장소에 올리지 않음
+data/공정첨부/*.md

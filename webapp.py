@@ -18,13 +18,30 @@ from ui.compare_panel import render_compare_panel
 from ui.results import render_results
 from ui.sidebar_params import render_config_sidebar
 from ui.snapshot_store import load_saved_snapshots, save_snapshots_to_disk
-from views import parameter_reference, process_guide
+from views import parameter_reference, process_description, tech_glossary, used_technology
+
+
+def _default_snapshot_display_name(snapshot_idx: int) -> str:
+    """자동 저장·사이드바 기본값에 쓰는 다음 스냅샷 표시 이름."""
+    return f"테스트 #{snapshot_idx}"
 
 
 st.set_page_config(
     page_title="한국미래소재 공정 시뮬레이션",
     page_icon="🏭",
     layout="wide",
+)
+
+# 슬라이더 트랙 양끝의 최소·최대값 라벨 숨김(현재 thumb 위 값 표시는 유지)
+st.markdown(
+    """
+    <style>
+    div[data-testid="stSliderTickBar"] {
+        display: none !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 if "last_run" not in st.session_state:
@@ -34,7 +51,7 @@ if "saved_runs" not in st.session_state:
     st.session_state.saved_runs = loaded_runs
     st.session_state.snapshot_idx = loaded_idx
 if "snap_name" not in st.session_state:
-    st.session_state.snap_name = f"실행 {st.session_state.snapshot_idx}"
+    st.session_state.snap_name = _default_snapshot_display_name(st.session_state.snapshot_idx)
 
 # 탭 위젯은 본문에서 먼저 만들어지므로, 같은 런의 사이드바 등에서는 이 플래그만 세우고 다음 rerun 초기에
 # `MAIN_TABS_WIDGET_KEY`를 설정한다(Streamlit은 위젯 생성 이후 해당 key의 session_state를 같은 런에서 수정할 수 없음).
@@ -46,17 +63,19 @@ if _pending_default_title is not None:
     st.session_state.snap_name = _pending_default_title
 
 # 앱 버전(사이드바 상단 표기)
-APP_VERSION_INFO = "v0.1.1 (2026.05.20)"
+APP_VERSION_INFO = "v0.1.2 (2026.05.21)"
 
 # 탭 라벨·세션 키(시뮬 완료 후 시뮬 탭으로 포커스할 때 사용)
 MAIN_TABS_KEY = "main_tabs"
-MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v2"
+MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v8"
 TAB_SIM_LABEL = "🏭 시뮬레이션"
 _tab_labels = [
     TAB_SIM_LABEL,
     "🆚 스냅샷 비교",
-    "📖 공정 설명",
+    "📄 공정 설명",
     "📋 파라미터·단위",
+    "📘 사용 기술",
+    "🔤 용어·약어",
 ]
 
 
@@ -64,7 +83,9 @@ def persist_run_snapshot(cfg: SimulationConfig, analysis: Analysis) -> None:
     """시뮬 완료 직후 자동 저장. 동일 설정(평탄화된 config)이 이미 있으면 결과만 갱신하고 표시 이름·id는 유지한다."""
     flat = flatten_config(cfg)
     saved = st.session_state.saved_runs
-    display_name = st.session_state.snap_name.strip() or f"실행 {st.session_state.snapshot_idx}"
+    display_name = st.session_state.snap_name.strip() or _default_snapshot_display_name(
+        st.session_state.snapshot_idx
+    )
     new_snap = snapshot(display_name, cfg, analysis)
     for i, s in enumerate(saved):
         if s.get("config") == flat:
@@ -82,7 +103,7 @@ def persist_run_snapshot(cfg: SimulationConfig, analysis: Analysis) -> None:
         saved.pop(0)
     saved.append(new_snap)
     st.session_state.snapshot_idx += 1
-    st.session_state[_PENDING_SNAP_NAME] = f"실행 {st.session_state.snapshot_idx}"
+    st.session_state[_PENDING_SNAP_NAME] = _default_snapshot_display_name(st.session_state.snapshot_idx)
     st.session_state._save_toast = (
         f"스냅샷 '{new_snap['name']}' 자동 저장됨 ({len(saved)}/{MAX_SNAPSHOTS})"
     )
@@ -92,15 +113,10 @@ def persist_run_snapshot(cfg: SimulationConfig, analysis: Analysis) -> None:
 st.title("🏭 한국미래소재 공정 물류 시뮬레이션")
 st.caption(
     "스크랩 구리 입고 → 선별/압착 → 장입/용해 → 하이브리드 주조 → 출하의 5단계 공정을 "
-    "SimPy 이산사건 시뮬레이션으로 분석합니다."
+    "SimPy 이산사건 시뮬레이션으로 분석합니다. "
+    "**📘 사용 기술** 탭에서 SimPy·OR-Tools·Streamlit을 쉽게, **📄 공정 설명** 탭에서 공정 서술 문서를 보거나 고치고, "
+    "**🔤 용어·약어** 탭에서 웹·IT 약어를 볼 수 있습니다."
 )
-with st.expander("🧩 기술 구성 요약", expanded=False):
-    st.markdown(
-        "- **SimPy** — 5단계 공정의 **이산사건 시뮬** 본체(설비·버퍼·대기열).\n"
-        "- **OR-Tools CP-SAT** — 결과 탭 **고급 분석**에서 반사로 **FIFO 실측**과 "
-        "**이론상 최적 makespan**만 비교(전 공정을 대체하지 않음).\n"
-        "- **Streamlit·Plotly·Pandas** — 웹 UI·차트·표 처리."
-    )
 
 # 시뮬 완료 등: 다음 rerun 직후·`st.tabs` 이전에 시뮬 탭으로 포커스
 if st.session_state.pop(_FOCUS_SIM_TAB_AFTER_RUN, False):
@@ -117,9 +133,13 @@ tab_sim = _tab_ctxs[_i]
 _i += 1
 tab_compare = _tab_ctxs[_i]
 _i += 1
-tab_process = _tab_ctxs[_i]
+tab_process_doc = _tab_ctxs[_i]
 _i += 1
 tab_params = _tab_ctxs[_i]
+_i += 1
+tab_used_tech = _tab_ctxs[_i]
+_i += 1
+tab_terms = _tab_ctxs[_i]
 
 
 with st.sidebar:
@@ -197,20 +217,15 @@ if run_btn:
     st.rerun()
 
 
-with tab_process:
-    process_guide.render()
-
-with tab_params:
-    parameter_reference.render()
-
 with tab_sim:
     run = st.session_state.last_run
 
     if run is None:
         st.info("👈 사이드바에서 파라미터를 조정하고 **시뮬레이션 실행** 버튼을 누르세요.")
         st.markdown(
-            "공정 흐름·설비 모델은 **공정 설명** 탭, "
-            "전체 파라미터 기본값·단위는 **파라미터·단위** 탭에서 확인할 수 있습니다."
+            "전체 파라미터 기본값·단위는 **파라미터·단위** 탭, "
+            "핵심 기술 쉬운 설명은 **📘 사용 기술** 탭, 웹·IT 약어는 **🔤 용어·약어** 탭에서 확인할 수 있습니다. "
+            "공정 서술은 **📄 공정 설명** 탭에서 `data/공정설명260521.md` 내용을 보거나 편집·저장할 수 있습니다."
         )
         if st.session_state.saved_runs:
             st.caption(
@@ -237,3 +252,14 @@ with tab_compare:
             "아직 저장된 스냅샷이 없습니다. **🏭 시뮬레이션** 탭에서 한 번 실행하면 자동으로 첫 스냅샷이 쌓입니다."
         )
 
+with tab_process_doc:
+    process_description.render()
+
+with tab_params:
+    parameter_reference.render()
+
+with tab_used_tech:
+    used_technology.render()
+
+with tab_terms:
+    tech_glossary.render()

@@ -332,10 +332,13 @@ def render_compare_panel(
 
     st.markdown("### 📋 시나리오별 요약")
     st.caption("각 카드는 한 스냅샷의 핵심 지표입니다. 기준이 아닌 실행은 하단에 **비교 요약·시사점**을 펼칠 수 있습니다.")
-    cards_per_row = 3
-    for row_start in range(0, n_snap, cards_per_row):
-        cols = st.columns(cards_per_row)
-        for ci, si in enumerate(range(row_start, min(row_start + cards_per_row, n_snap))):
+    # 행마다 실제 카드 수만큼 열을 나눔(예: 스냅샷 2건인데 3열 고정이면 오른쪽 1열이 빈 여백이 됨).
+    cards_per_row_max = 3
+    for row_start in range(0, n_snap, cards_per_row_max):
+        row_end = min(row_start + cards_per_row_max, n_snap)
+        n_in_row = row_end - row_start
+        cols = st.columns(n_in_row)
+        for ci, si in enumerate(range(row_start, row_end)):
             s = snaps[si]
             is_base = si == baseline_idx
             k = s["kpi"]

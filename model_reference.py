@@ -1,4 +1,4 @@
-"""공정 설명·파라미터 참조 데이터 (문서 페이지용)."""
+"""공정 설명·시뮬레이션 조건 참조 데이터 (문서·표 페이지용)."""
 
 from __future__ import annotations
 
@@ -82,6 +82,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "시:분",
         "당일 입고 가능 시작(분 단위 내부값을 시각으로 표시).",
         lambda c: c.inbound.arrival_start_min,
+        ui_adjustable=True,
         display=_fmt_time,
     ),
     ParamSpec(
@@ -90,6 +91,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "시:분",
         "당일 입고 가능 종료.",
         lambda c: c.inbound.arrival_end_min,
+        ui_adjustable=True,
         display=_fmt_time,
     ),
     ParamSpec(
@@ -98,6 +100,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "시:분",
         "이 시각 이전을 '오전' 구간으로 보고 도착 시간을 샘플링.",
         lambda c: c.inbound.morning_cutoff_min,
+        ui_adjustable=True,
         display=_fmt_time,
     ),
     ParamSpec(
@@ -106,6 +109,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "%",
         "트럭이 오전 구간에 도착할 확률.",
         lambda c: c.inbound.morning_share,
+        ui_adjustable=True,
         display=lambda v: f"{float(v) * 100:.0f}",
     ),
     ParamSpec(
@@ -114,6 +118,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "분",
         "계근대 점유 시간(입차 계근).",
         lambda c: c.inbound.weigh_in_min,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "① 입고 / 하역",
@@ -121,6 +126,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "분",
         "하역 후 출차 계근.",
         lambda c: c.inbound.weigh_out_min,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "① 입고 / 하역",
@@ -128,6 +134,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "분",
         "하역 베이 1곳 점유 시간.",
         lambda c: c.inbound.unload_min,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "① 입고 / 하역",
@@ -135,6 +142,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "대",
         "동시 하역 가능 베이( SimPy Resource 용량).",
         lambda c: c.inbound.unloading_bays,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "① 입고 / 하역",
@@ -142,6 +150,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "대",
         "입·출고 계근 공유 자원 용량.",
         lambda c: c.inbound.weighbridges,
+        ui_adjustable=True,
     ),
     # ② 선별
     ParamSpec(
@@ -150,6 +159,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "분",
         "선별기 1대가 트럭 1대 분량을 처리하는 시간.",
         lambda c: c.sorting.sort_min_per_truck,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "② 선별 / 압착",
@@ -157,6 +167,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "개",
         "트럭 1대를 나누는 소분할 더미 수 → 압착 작업 수.",
         lambda c: c.sorting.subpiles_per_truck,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "② 선별 / 압착",
@@ -164,6 +175,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "t",
         "압착 완료 후 파레트 1개에 해당하는 중량.",
         lambda c: c.sorting.subpile_ton,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "② 선별 / 압착",
@@ -171,6 +183,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "개",
         "sub-pile당 압착 블록 수.",
         lambda c: c.sorting.blocks_per_subpile,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "② 선별 / 압착",
@@ -178,6 +191,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "t",
         "압착 1블록당 중량(모델 내 집계용).",
         lambda c: c.sorting.block_ton,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "② 선별 / 압착",
@@ -185,6 +199,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "분",
         "블록 1개당 이송 시간(압착 사이클에 포함).",
         lambda c: c.sorting.forklift_min_per_block,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "② 선별 / 압착",
@@ -192,6 +207,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "분",
         "블록 1개당 압착 시간.",
         lambda c: c.sorting.press_min_per_block,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "② 선별 / 압착",
@@ -199,6 +215,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "분",
         "블록 1개당 파레트 적재 시간.",
         lambda c: c.sorting.pallet_load_min_per_block,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "② 선별 / 압착",
@@ -242,6 +259,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "t",
         "반사로 1회 처리 목표 용량.",
         lambda c: c.melting.batch_ton,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "③ 장입 / 용해",
@@ -249,6 +267,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "t",
         "장입 1파레트 중량.",
         lambda c: c.melting.pallet_ton,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "③ 장입 / 용해",
@@ -263,6 +282,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "파레트",
         "왕복 1회에 올리는 파레트 수.",
         lambda c: c.melting.elevator_pallets_per_trip,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "③ 장입 / 용해",
@@ -270,6 +290,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "분",
         "엘리베이터 자원 점유 시간 / 1회.",
         lambda c: c.melting.elevator_cycle_min,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "③ 장입 / 용해",
@@ -277,6 +298,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "대",
         "병렬 엘리베이터 자원 용량.",
         lambda c: c.melting.elevator_count,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "③ 장입 / 용해",
@@ -284,6 +306,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "분",
         "장입 후 용해 전 셋업.",
         lambda c: c.melting.setup_min,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "③ 장입 / 용해",
@@ -317,6 +340,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "t",
         "큐프레이크 주조 1회 단위 중량.",
         lambda c: c.casting.flake_unit_ton,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "④ 하이브리드 주조",
@@ -324,6 +348,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "분/단위",
         "단위 1개 주조 소요.",
         lambda c: c.casting.flake_min_per_unit,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "④ 하이브리드 주조",
@@ -331,6 +356,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "t",
         "SCR 주조 1회 단위 중량.",
         lambda c: c.casting.scr_unit_ton,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "④ 하이브리드 주조",
@@ -338,6 +364,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "분/단위",
         "단위 1개 주조 소요.",
         lambda c: c.casting.scr_min_per_unit,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "④ 하이브리드 주조",
@@ -345,20 +372,23 @@ PARAM_SPECS: list[ParamSpec] = [
         "분",
         "용해 후 주조 전 홀딩 준비.",
         lambda c: c.casting.holding_setup_min,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "④ 하이브리드 주조",
         "큐프레이크 야적 버퍼",
         "단위",
-        "출하 대기 큐프레이크 저장 한도.",
+        "출하 대기 큐프레이크 저장 한도(1단위 = 큐프레이크 단위 t).",
         lambda c: c.casting.flake_buffer_cap,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "④ 하이브리드 주조",
         "SCR 야적 버퍼",
         "단위",
-        "출하 대기 SCR 저장 한도.",
+        "출하 대기 SCR 저장 한도(1단위 = SCR 단위 t).",
         lambda c: c.casting.scr_buffer_cap,
+        ui_adjustable=True,
     ),
     # ⑤ 출하
     ParamSpec(
@@ -375,6 +405,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "t",
         "1대당 목표 상차 중량.",
         lambda c: c.outbound.truck_capacity_ton,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "⑤ 출하",
@@ -382,6 +413,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "%",
         "출하 트럭이 큐프레이크 야적을 방문할 확률.",
         lambda c: c.outbound.flake_truck_prob,
+        ui_adjustable=True,
         display=lambda v: f"{float(v) * 100:.0f}",
     ),
     ParamSpec(
@@ -390,6 +422,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "분",
         "상차 전 계근.",
         lambda c: c.outbound.weigh_in_min,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "⑤ 출하",
@@ -397,6 +430,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "분",
         "상차 후 계근.",
         lambda c: c.outbound.weigh_out_min,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "⑤ 출하",
@@ -404,6 +438,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "분",
         "야적에서 제품 적재.",
         lambda c: c.outbound.load_min,
+        ui_adjustable=True,
     ),
     ParamSpec(
         "⑤ 출하",
@@ -411,6 +446,7 @@ PARAM_SPECS: list[ParamSpec] = [
         "분",
         "야적 재고가 없을 때 최대 대기 후 abort.",
         lambda c: c.outbound.max_wait_min,
+        ui_adjustable=True,
     ),
 ]
 
@@ -491,7 +527,7 @@ def parameters_dataframe(
     *,
     defaults_only: bool = False,
 ) -> pd.DataFrame:
-    """파라미터 표용 DataFrame."""
+    """시뮬레이션 조건 표용 DataFrame."""
     current = cfg or DEFAULT_CONFIG
     default = DEFAULT_CONFIG
     rows: list[dict[str, str]] = []
@@ -501,11 +537,11 @@ def parameters_dataframe(
         rows.append(
             {
                 "구분": spec.section,
-                "파라미터": spec.label,
+                "조건 항목": spec.label,
                 "기본값": _display(def_val, spec),
                 "현재값": _display(cur_val, spec) if not defaults_only else _display(def_val, spec),
                 "단위": spec.unit,
-                "UI 조정": "✓" if spec.ui_adjustable else "—",
+                "사이드바 조정": "✓" if spec.ui_adjustable else "—",
                 "설명": spec.description,
             }
         )
@@ -522,6 +558,8 @@ _UI_TABLE_SKIP_LABELS = frozenset(
 
 
 def adjustable_parameters(cfg: SimulationConfig | None = None) -> pd.DataFrame:
-    """사이드바에서 조정하는 항목과 동일하게, 파생·읽기 전용 몇 항목만 제외한다."""
+    """사이드바 슬라이더로 조정 가능한 조건만 (파생·읽기 전용·시드 제외)."""
     df = parameters_dataframe(cfg)
-    return df[~df["파라미터"].isin(_UI_TABLE_SKIP_LABELS)].reset_index(drop=True)
+    df = df[~df["조건 항목"].isin(_UI_TABLE_SKIP_LABELS)]
+    df = df[df["사이드바 조정"] == "✓"]
+    return df.reset_index(drop=True)
