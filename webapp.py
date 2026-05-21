@@ -1,4 +1,4 @@
-"""A 공정 시뮬레이션 — Streamlit 대시보드.
+"""공정 시뮬레이션 — Streamlit 대시보드.
 
 실행: `streamlit run webapp.py`
 """
@@ -27,7 +27,7 @@ def _default_snapshot_display_name(snapshot_idx: int) -> str:
 
 
 st.set_page_config(
-    page_title="A 공정 시뮬레이션",
+    page_title="공정 시뮬레이션",
     page_icon="🏭",
     layout="wide",
 )
@@ -110,7 +110,7 @@ def persist_run_snapshot(cfg: SimulationConfig, analysis: Analysis) -> None:
     save_snapshots_to_disk(saved, st.session_state.snapshot_idx)
 
 
-st.title("🏭 A 공정 물류 시뮬레이션")
+st.title("🏭 공정 물류 시뮬레이션")
 st.caption(
     "스크랩 구리 입고 → 선별/압착 → 장입/용해 → 하이브리드 주조 → 출하의 5단계 공정을 "
     "SimPy 이산사건 시뮬레이션으로 분석합니다. "

@@ -1,4 +1,4 @@
-# A 공정 물류 시뮬레이션 (Streamlit)
+# 공정 물류 시뮬레이션 (Streamlit)
 
 SimPy 기반 이산사건 시뮬레이션과 Streamlit 대시보드입니다.
 
