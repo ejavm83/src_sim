@@ -1,0 +1,14 @@
+flowchart LR
+    IN["① 입고·하역<br/>트럭 도착·계근"]
+    SO["② 선별·압착<br/>블록 처리"]
+    ME["③ 장입·용해<br/>엘리베이터·반사로"]
+    CA["④ 하이브리드 주조<br/>큐프레이크·SCR"]
+    OU["⑤ 출하<br/>상차·계근"]
+
+    IN --> SO --> ME --> CA --> OU
+
+    IN -.->|"Resource"| R1["계근대·하역베이"]
+    SO -.->|"Resource·Store"| R2["선별기·압착기·버퍼"]
+    ME -.->|"Resource·FIFO"| R3["엘리베이터·반사로"]
+    CA -.->|"Resource·Store"| R4["주조라인·야적"]
+    OU -.->|"Resource"| R5["출하 계근·상차"]

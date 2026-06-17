@@ -11,14 +11,24 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from config import DEFAULT_CONFIG, SimulationConfig
+from config_sanitize import sanitize_for_simulation, simulation_config_issues
 from report import Analysis, analyze
 from run_compare import MAX_SNAPSHOTS, flatten_config, snapshot
 from simulation import run_simulation
+from ui.app_settings import get_gemini_api_key, session_api_key_name
 from ui.compare_panel import render_compare_panel
 from ui.results import render_results
 from ui.sidebar_params import render_config_sidebar
 from ui.snapshot_store import load_saved_snapshots, save_snapshots_to_disk
-from views import parameter_reference, process_description, tech_glossary, used_technology
+from views import (
+    parameter_reference,
+    process_description,
+    process_parameters,
+    settings,
+    tech_glossary,
+    used_technology,
+)
+from views.process_description import FOCUS_PARAMS_TAB_AFTER_EXTRACT
 
 
 def _default_snapshot_display_name(snapshot_idx: int) -> str:
@@ -32,12 +42,40 @@ st.set_page_config(
     layout="wide",
 )
 
-# 슬라이더 트랙 양끝의 최소·최대값 라벨 숨김(현재 thumb 위 값 표시는 유지)
+# 슬라이더 트랙 양끝 라벨 숨김 + 상단 헤더·탭 간격 축소
 st.markdown(
     """
     <style>
     div[data-testid="stSliderTickBar"] {
         display: none !important;
+    }
+    [data-testid="stAppViewContainer"] .main .block-container {
+        padding-top: 0.75rem;
+        padding-bottom: 1rem;
+    }
+    [data-testid="stAppViewContainer"] .main .block-container > div:first-child {
+        gap: 0.35rem;
+    }
+    .app-title {
+        font-size: 1.15rem;
+        font-weight: 600;
+        margin: 0;
+        padding: 0;
+        line-height: 1.3;
+        color: inherit;
+    }
+    .app-title-home {
+        cursor: pointer;
+        user-select: none;
+    }
+    .app-title-home:hover {
+        opacity: 0.82;
+    }
+    div[data-testid="stTabs"] {
+        margin-top: 0.15rem;
+    }
+    div[data-testid="stTabs"] [data-baseweb="tab-list"] {
+        gap: 0.25rem;
     }
     </style>
     """,
@@ -52,6 +90,10 @@ if "saved_runs" not in st.session_state:
     st.session_state.snapshot_idx = loaded_idx
 if "snap_name" not in st.session_state:
     st.session_state.snap_name = _default_snapshot_display_name(st.session_state.snapshot_idx)
+if session_api_key_name() not in st.session_state:
+    persisted_key = get_gemini_api_key()
+    if persisted_key:
+        st.session_state[session_api_key_name()] = persisted_key
 
 # 탭 위젯은 본문에서 먼저 만들어지므로, 같은 런의 사이드바 등에서는 이 플래그만 세우고 다음 rerun 초기에
 # `MAIN_TABS_WIDGET_KEY`를 설정한다(Streamlit은 위젯 생성 이후 해당 key의 session_state를 같은 런에서 수정할 수 없음).
@@ -63,20 +105,118 @@ if _pending_default_title is not None:
     st.session_state.snap_name = _pending_default_title
 
 # 앱 버전(사이드바 상단 표기)
-APP_VERSION_INFO = "v0.1.5 (2026.05.21)"
+APP_VERSION_INFO = "v0.2.0 (2026.06.17)"
 
 # 탭 라벨·세션 키(시뮬 완료 후 시뮬 탭으로 포커스할 때 사용)
 MAIN_TABS_KEY = "main_tabs"
-MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v8"
+MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v11"
 TAB_SIM_LABEL = "🏭 시뮬레이션"
-_tab_labels = [
-    TAB_SIM_LABEL,
-    "🆚 스냅샷 비교",
-    "📄 공정 설명",
-    "📋 파라미터·단위",
-    "📘 사용 기술",
-    "🔤 용어·약어",
-]
+TAB_COMPARE_LABEL = "🆚 스냅샷 비교"
+TAB_PROCESS_DOC_LABEL = "📄 공정 설명"
+TAB_EXTRACTED_PARAMS_LABEL = "📊 파라메터"
+TAB_PARAMS_LABEL = "📋 파라미터·단위"
+TAB_USED_TECH_LABEL = "📘 사용 기술"
+TAB_TERMS_LABEL = "🔤 용어·약어"
+TAB_SETTINGS_LABEL = "⚙️ 설정"
+_DEV_TABS_VISIBLE_KEY = "dev_tabs_visible"
+_DEV_TABS_TOGGLE_QP = "__dev_tabs_toggle"
+_DOC_BOOTSTRAP_KEY = "_doc_baseline_bootstrapped"
+
+
+def _bootstrap_doc_extracted_config() -> None:
+    """저장된 문서 기준선을 복원하거나, 없으면 최초 자동 추출을 시도한다."""
+    if st.session_state.get(_DOC_BOOTSTRAP_KEY):
+        return
+    st.session_state[_DOC_BOOTSTRAP_KEY] = True
+
+    from llm_config import EXTRACTED_CHANGE_DETAILS_KEY, EXTRACTED_CHANGED_LABELS_KEY
+    from ui.doc_baseline import (
+        apply_doc_extract_config,
+        load_doc_baseline,
+        md_fingerprint,
+    )
+    from views.process_description import _load_text
+
+    md_text = _load_text()
+    if not md_text.strip():
+        return
+
+    baseline_cfg, baseline_fp = load_doc_baseline()
+    if baseline_cfg is not None:
+        st.session_state["extracted_config"] = baseline_cfg
+        st.session_state[EXTRACTED_CHANGED_LABELS_KEY] = set()
+        st.session_state[EXTRACTED_CHANGE_DETAILS_KEY] = {}
+        if baseline_fp and md_fingerprint(md_text) != baseline_fp:
+            st.session_state["_doc_md_stale"] = True
+        return
+
+    from llm_config import api_key_configured
+
+    if not api_key_configured():
+        return
+
+    try:
+        from views.process_description import _extract_with_doc_baseline
+
+        (proposed, _changes, _extracted), is_initial = _extract_with_doc_baseline(md_text)
+        if is_initial:
+            apply_doc_extract_config(proposed, [], md_text=md_text)
+    except Exception:
+        pass
+
+
+def _handle_dev_tabs_shortcut() -> None:
+    """Shift+F12로 파라미터·단위·용어·약어 탭 표시를 토글한다."""
+    if _DEV_TABS_VISIBLE_KEY not in st.session_state:
+        st.session_state[_DEV_TABS_VISIBLE_KEY] = False
+
+    if st.query_params.get(_DEV_TABS_TOGGLE_QP):
+        st.session_state[_DEV_TABS_VISIBLE_KEY] = not st.session_state[_DEV_TABS_VISIBLE_KEY]
+        del st.query_params[_DEV_TABS_TOGGLE_QP]
+        st.rerun()
+
+    components.html(
+        f"""
+        <script>
+        (function() {{
+            try {{
+                const w = window.top || window.parent;
+                if (!w || w.__simDevTabsShortcutBound) return;
+                w.__simDevTabsShortcutBound = true;
+                w.addEventListener("keydown", function(e) {{
+                    if (e.shiftKey && e.key === "F12") {{
+                        e.preventDefault();
+                        const url = new URL(w.location.href);
+                        url.searchParams.set("{_DEV_TABS_TOGGLE_QP}", "1");
+                        w.location.href = url.toString();
+                    }}
+                }}, true);
+            }} catch (err) {{
+                // iframe sandbox / cross-origin — 개발자 탭 단축키만 비활성
+            }}
+        }})();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+
+def _visible_main_tab_labels() -> list[str]:
+    labels = [TAB_SIM_LABEL, TAB_COMPARE_LABEL, TAB_PROCESS_DOC_LABEL, TAB_EXTRACTED_PARAMS_LABEL]
+    if st.session_state.get(_DEV_TABS_VISIBLE_KEY, False):
+        labels.append(TAB_PARAMS_LABEL)
+    labels.append(TAB_USED_TECH_LABEL)
+    if st.session_state.get(_DEV_TABS_VISIBLE_KEY, False):
+        labels.append(TAB_TERMS_LABEL)
+    labels.append(TAB_SETTINGS_LABEL)
+    return labels
+
+
+def _sanitize_main_tab_selection(visible_labels: list[str]) -> None:
+    current = st.session_state.get(MAIN_TABS_WIDGET_KEY)
+    if current and current not in visible_labels:
+        st.session_state[MAIN_TABS_WIDGET_KEY] = TAB_SIM_LABEL
 
 
 def persist_run_snapshot(cfg: SimulationConfig, analysis: Analysis) -> None:
@@ -110,55 +250,36 @@ def persist_run_snapshot(cfg: SimulationConfig, analysis: Analysis) -> None:
     save_snapshots_to_disk(saved, st.session_state.snapshot_idx)
 
 
-st.title("🏭 공정 물류 시뮬레이션")
-st.caption(
-    "스크랩 구리 입고 → 선별/압착 → 장입/용해 → 하이브리드 주조 → 출하의 5단계 공정을 "
-    "SimPy 이산사건 시뮬레이션으로 분석합니다. "
-    "**📘 사용 기술** 탭에서 SimPy·OR-Tools·Streamlit을 쉽게, **📄 공정 설명** 탭에서 공정 서술 문서를 보거나 고치고, "
-    "**🔤 용어·약어** 탭에서 웹·IT 약어를 볼 수 있습니다."
+st.markdown(
+    '<p class="app-title app-title-home" role="button" tabindex="0" '
+    'title="홈 (새로고침)" '
+    'onclick="window.parent.location.reload()">'
+    "🏭 공정 물류 시뮬레이션</p>",
+    unsafe_allow_html=True,
 )
 
-# 시뮬 완료 등: 다음 rerun 직후·`st.tabs` 이전에 시뮬 탭으로 포커스
+_handle_dev_tabs_shortcut()
+_bootstrap_doc_extracted_config()
+
+# 시뮬 완료·파라미터 추출 완료: 다음 rerun 직후·`st.tabs` 이전에 해당 탭으로 포커스
 if st.session_state.pop(_FOCUS_SIM_TAB_AFTER_RUN, False):
     st.session_state[MAIN_TABS_WIDGET_KEY] = TAB_SIM_LABEL
+if st.session_state.pop(FOCUS_PARAMS_TAB_AFTER_EXTRACT, False):
+    st.session_state[MAIN_TABS_WIDGET_KEY] = TAB_EXTRACTED_PARAMS_LABEL
 
+_tab_labels = _visible_main_tab_labels()
+_sanitize_main_tab_selection(_tab_labels)
 _tab_ctxs = st.tabs(
     _tab_labels,
     key=MAIN_TABS_WIDGET_KEY,
     on_change="rerun",
     default=TAB_SIM_LABEL,
 )
-_i = 0
-tab_sim = _tab_ctxs[_i]
-_i += 1
-tab_compare = _tab_ctxs[_i]
-_i += 1
-tab_process_doc = _tab_ctxs[_i]
-_i += 1
-tab_params = _tab_ctxs[_i]
-_i += 1
-tab_used_tech = _tab_ctxs[_i]
-_i += 1
-tab_terms = _tab_ctxs[_i]
+_tab_by_label = dict(zip(_tab_labels, _tab_ctxs, strict=True))
 
 
 with st.sidebar:
-    _sb_home, _sb_ver = st.columns([1, 1.15], gap="small")
-    with _sb_home:
-        if st.button(
-            "🏠 홈",
-            use_container_width=True,
-            help="브라우저 새로고침(F5)과 같습니다. 페이지·세션 상태가 처음부터 다시 로드됩니다.",
-            key="nav_home_sidebar",
-        ):
-            # st.rerun()은 세션을 유지하므로, F5와 동일한 효과는 부모 창 전체 reload가 필요함
-            components.html(
-                "<script>window.parent.location.reload();</script>",
-                height=0,
-                width=0,
-            )
-    with _sb_ver:
-        st.caption(APP_VERSION_INFO)
+    st.caption(APP_VERSION_INFO)
     st.divider()
     st.header("⚙️ 시뮬레이션 파라미터")
     try:
@@ -168,7 +289,46 @@ with st.sidebar:
     except Exception:
         st.caption("기본값: 코드 내장( `data` 에 `.xlsx` 없음 )")
 
-    cfg = render_config_sidebar(DEFAULT_CONFIG)
+    # 공정 설명 문서에서 추출·적용한 값이 있으면 그걸 기본값으로 쓴다(없으면 엑셀·코드 기본).
+    from llm_config import EXTRACTED_CHANGE_DETAILS_KEY, EXTRACTED_CHANGED_LABELS_KEY
+
+    cfg_base = st.session_state.get("extracted_config", DEFAULT_CONFIG)
+    _changed_labels = st.session_state.get(EXTRACTED_CHANGED_LABELS_KEY) or set()
+    _change_details = st.session_state.get(EXTRACTED_CHANGE_DETAILS_KEY) or {}
+    if "extracted_config" in st.session_state:
+        if st.session_state.pop("_doc_md_stale", False):
+            st.markdown(
+                '<p style="margin:0 0 0.35rem 0;padding:0.45rem 0.55rem;'
+                "background:#e3f2fd;border:1px solid #90caf9;border-radius:6px;"
+                'font-size:0.82rem;line-height:1.4;color:#0d47a1;">'
+                "📄 공정 설명 문서가 마지막 적용 이후 변경되었습니다. "
+                "**📄 공정 설명** 탭에서 **문서에서 파라미터 추출**을 다시 실행하세요.</p>",
+                unsafe_allow_html=True,
+            )
+        if _changed_labels:
+            st.markdown(
+                f'<p style="margin:0 0 0.35rem 0;padding:0.45rem 0.55rem;'
+                "background:#fff3e0;border:1px solid #fcd34d;border-radius:6px;"
+                'font-size:0.82rem;line-height:1.4;color:#92400e;">'
+                f"📄 문서 추출로 <strong>{len(_changed_labels)}개</strong> 항목이 변경되었습니다. "
+                "아래 주황 표시·펼쳐진 섹션을 확인하세요.</p>",
+                unsafe_allow_html=True,
+            )
+            with st.expander("변경 내역 보기", expanded=True):
+                for label in sorted(_changed_labels):
+                    det = _change_details.get(label, {})
+                    st.markdown(
+                        f"- **{label}**: {det.get('기존값', '?')} → **{det.get('추출값', '?')}**"
+                    )
+        else:
+            st.caption("📄 **공정 설명** 문서에서 추출한 값이 기본으로 반영되어 있습니다.")
+    _cfg_nonce = st.session_state.get("config_nonce", 0)
+    cfg = render_config_sidebar(
+        cfg_base,
+        key_suffix=f"_v{_cfg_nonce}",
+        highlight_labels=_changed_labels,
+        change_details=_change_details,
+    )
 
     run_btn = st.button("🚀 시뮬레이션 실행", type="primary", use_container_width=True)
 
@@ -187,7 +347,18 @@ with st.sidebar:
 if st.session_state.get("_save_toast"):
     st.toast(st.session_state.pop("_save_toast"), icon="💾")
 
+if st.session_state.get("_llm_apply_toast"):
+    st.toast(st.session_state.pop("_llm_apply_toast"), icon="📄")
+
 if run_btn:
+    issues = simulation_config_issues(cfg)
+    cfg = sanitize_for_simulation(cfg)
+    if issues:
+        st.warning(
+            "유효 범위를 벗어난 파라미터를 자동 보정했습니다. "
+            "사이드바에서 값을 확인하세요. (" + " · ".join(issues) + ")"
+        )
+
     progress_bar = st.progress(0.0, text="시뮬레이션 준비 중...")
 
     def progress_cb(frac: float, sim_min: float) -> None:
@@ -217,14 +388,13 @@ if run_btn:
     st.rerun()
 
 
-with tab_sim:
+with _tab_by_label[TAB_SIM_LABEL]:
     run = st.session_state.last_run
 
     if run is None:
         st.info("👈 사이드바에서 파라미터를 조정하고 **시뮬레이션 실행** 버튼을 누르세요.")
         st.markdown(
-            "전체 파라미터 기본값·단위는 **파라미터·단위** 탭, "
-            "핵심 기술 쉬운 설명은 **📘 사용 기술** 탭, 웹·IT 약어는 **🔤 용어·약어** 탭에서 확인할 수 있습니다. "
+            "핵심 기술 쉬운 설명은 **📘 사용 기술** 탭에서 확인할 수 있습니다. "
             "공정 서술은 **📄 공정 설명** 탭에서 `data/공정설명260521.md` 내용을 보거나 편집·저장할 수 있습니다."
         )
         if st.session_state.saved_runs:
@@ -239,7 +409,7 @@ with tab_sim:
             run["analysis"],
         )
 
-with tab_compare:
+with _tab_by_label[TAB_COMPARE_LABEL]:
     st.markdown(
         "저장해 둔 실행 스냅샷끼리 **KPI·파라미터·자원 가동률·일별 생산 추이**를 한 화면에서 비교합니다. "
         "각 블록 아래에는 **무엇이 달라졌는지(비교 요약)**와 **그 결과가 의미하는 바(시사점)**를 따로 적어 두었습니다. "
@@ -252,14 +422,22 @@ with tab_compare:
             "아직 저장된 스냅샷이 없습니다. **🏭 시뮬레이션** 탭에서 한 번 실행하면 자동으로 첫 스냅샷이 쌓입니다."
         )
 
-with tab_process_doc:
+with _tab_by_label[TAB_PROCESS_DOC_LABEL]:
     process_description.render()
 
-with tab_params:
-    parameter_reference.render()
+with _tab_by_label[TAB_EXTRACTED_PARAMS_LABEL]:
+    process_parameters.render()
 
-with tab_used_tech:
+if TAB_PARAMS_LABEL in _tab_by_label:
+    with _tab_by_label[TAB_PARAMS_LABEL]:
+        parameter_reference.render()
+
+with _tab_by_label[TAB_USED_TECH_LABEL]:
     used_technology.render()
 
-with tab_terms:
-    tech_glossary.render()
+if TAB_TERMS_LABEL in _tab_by_label:
+    with _tab_by_label[TAB_TERMS_LABEL]:
+        tech_glossary.render()
+
+with _tab_by_label[TAB_SETTINGS_LABEL]:
+    settings.render()
