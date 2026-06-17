@@ -1,0 +1,20 @@
+sequenceDiagram
+    actor U as 사용자
+    participant ST as Streamlit
+    participant SP as SimPy
+    participant AN as 분석(report)
+    participant CP as CP-SAT
+
+    U->>ST: 🚀 시뮬레이션 실행
+    ST->>SP: run_simulation(파라미터)
+    Note over SP: 가상 시계 진행<br/>이벤트·생산량 기록
+    SP-->>ST: Metrics (결과 원시 데이터)
+    ST->>AN: analyze(Metrics)
+    AN-->>ST: KPI·병목·인사이트
+    ST-->>U: 🏭 시뮬레이션 탭에 결과 표시
+
+    U->>ST: 🔬 고급 분석 열기 (선택)
+    ST->>CP: run_optimizer(배치 일정)
+    Note over CP: 반사로 NoOverlap<br/>이론 최적 makespan
+    CP-->>ST: FIFO vs 최적 비교
+    ST-->>U: 간트 차트·절감 가능 시간

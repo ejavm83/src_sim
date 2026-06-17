@@ -5,3 +5,4 @@ streamlit>=1.45.0
 plotly>=5.18
 pandas>=2.0
 ortools>=9.7
+google-genai>=1.0

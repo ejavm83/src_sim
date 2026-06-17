@@ -9,6 +9,9 @@ dist/
 build/
 local_settings.json
 
+# Streamlit 비밀 설정(API 키 등) — 커밋 금지. config.toml은 추적함.
+.streamlit/secrets.toml
+
 # MS Office / Excel 임시 잠금 파일
 ~$*
 
