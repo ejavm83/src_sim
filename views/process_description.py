@@ -86,7 +86,7 @@ def render() -> None:
         f"파일: `{PROCESS_DOC_PATH.relative_to(PROCESS_DOC_PATH.parent.parent)}` — "
         "기본은 읽기 전용입니다. **편집**으로 수정하거나, 아래에서 **.md 파일**을 가져오기/보내기 할 수 있습니다. "
         "읽기 화면에서는 숫자·단위만 자동 강조되며, 파일에는 HTML 태그를 넣지 않아도 됩니다. "
-        "아래 **문서에서 파라미터 추출**로 시뮬 설정을 뽑은 뒤 **📊 파라메터** 탭에서 확인·적용하세요."
+        "**🌳 공정 트리** 탭에서 공정 구조를 추출·편집하고 **시뮬레이션에 적용**할 수 있습니다."
     )
 
     if not PROCESS_DOC_PATH.is_file():
@@ -179,64 +179,3 @@ def render() -> None:
             st.rerun()
         except OSError as e:
             st.error(f"저장에 실패했습니다: {e}")
-
-    _render_extract_from_doc(is_editing)
-
-
-def _render_extract_from_doc(is_editing: bool) -> None:
-    """문서 본문에서 시뮬 파라미터를 추출한다. 완료 시 파라메터 탭으로 이동한다."""
-    _sync_llm_extract_session()
-
-    st.divider()
-    st.subheader("문서에서 파라미터 추출")
-    st.caption(
-        "문서 본문의 숫자를 읽어 시뮬레이션 파라미터로 추출합니다. "
-        "**처음 추출**은 문서 값을 바로 적용하며, **이후에는 마지막 적용값과 비교**해 "
-        "문서를 수정한 경우에만 변경 내역을 표시합니다. "
-        "(Google Gemini API 키 필요 — **⚙️ 설정** 탭에서 등록, "
-        "또는 [Google AI Studio](https://aistudio.google.com/apikey)에서 발급)"
-    )
-
-    current_text = (
-        str(st.session_state.get(_SESSION_DRAFT_KEY, "")) if is_editing else _load_text()
-    )
-    if is_editing:
-        st.caption(
-            "⚠️ 편집 중인 초안 기준으로 추출합니다. "
-            "디스크에 저장된 내용으로 하려면 먼저 **파일에 저장**하세요."
-        )
-    elif not current_text.strip():
-        st.info("문서가 없습니다. 위에서 내용을 작성·저장한 뒤 추출하세요.")
-
-    if st.button(
-        "문서에서 파라미터 추출",
-        type="secondary",
-        disabled=not current_text.strip(),
-        help="문서를 분석해 입력 파라미터를 뽑습니다. 문서 수정 후에는 이전 적용값과 비교합니다.",
-        key=_BTN_EXTRACT_KEY,
-    ):
-        from ui.doc_baseline import apply_doc_extract_config
-
-        with st.spinner("문서에서 파라미터를 추출하는 중..."):
-            try:
-                (proposed, _changes, extracted), is_initial = _extract_with_doc_baseline(
-                    current_text
-                )
-            except Exception as e:  # noqa: BLE001
-                st.session_state.pop(_LLM_PROPOSED_KEY, None)
-                st.session_state.pop(_LLM_EXTRACTED_KEY, None)
-                st.error(f"추출에 실패했습니다: {e}")
-            else:
-                if is_initial:
-                    apply_doc_extract_config(proposed, [], md_text=current_text)
-                    st.session_state.pop(_LLM_PROPOSED_KEY, None)
-                    st.session_state.pop(_LLM_EXTRACTED_KEY, None)
-                    st.session_state["_llm_apply_toast"] = (
-                        "문서에서 파라미터를 처음 추출해 사이드바에 적용했습니다."
-                    )
-                    st.rerun()
-                else:
-                    st.session_state[_LLM_PROPOSED_KEY] = proposed
-                    st.session_state[_LLM_EXTRACTED_KEY] = extracted
-                    st.session_state[FOCUS_PARAMS_TAB_AFTER_EXTRACT] = True
-                    st.rerun()
