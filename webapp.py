@@ -24,6 +24,7 @@ from views import (
     parameter_reference,
     process_description,
     process_parameters,
+    process_tree_view,
     settings,
     tech_glossary,
     used_technology,
@@ -105,14 +106,15 @@ if _pending_default_title is not None:
     st.session_state.snap_name = _pending_default_title
 
 # 앱 버전(사이드바 상단 표기)
-APP_VERSION_INFO = "v0.2.0 (2026.06.17)"
+APP_VERSION_INFO = "v0.2.1 (2026.06.22)"
 
 # 탭 라벨·세션 키(시뮬 완료 후 시뮬 탭으로 포커스할 때 사용)
 MAIN_TABS_KEY = "main_tabs"
-MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v11"
+MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v12"
 TAB_SIM_LABEL = "🏭 시뮬레이션"
 TAB_COMPARE_LABEL = "🆚 스냅샷 비교"
 TAB_PROCESS_DOC_LABEL = "📄 공정 설명"
+TAB_PROCESS_TREE_LABEL = "🌳 공정 트리"
 TAB_EXTRACTED_PARAMS_LABEL = "📊 파라메터"
 TAB_PARAMS_LABEL = "📋 파라미터·단위"
 TAB_USED_TECH_LABEL = "📘 사용 기술"
@@ -203,7 +205,13 @@ def _handle_dev_tabs_shortcut() -> None:
 
 
 def _visible_main_tab_labels() -> list[str]:
-    labels = [TAB_SIM_LABEL, TAB_COMPARE_LABEL, TAB_PROCESS_DOC_LABEL, TAB_EXTRACTED_PARAMS_LABEL]
+    labels = [
+        TAB_SIM_LABEL,
+        TAB_COMPARE_LABEL,
+        TAB_PROCESS_DOC_LABEL,
+        TAB_PROCESS_TREE_LABEL,
+        TAB_EXTRACTED_PARAMS_LABEL,
+    ]
     if st.session_state.get(_DEV_TABS_VISIBLE_KEY, False):
         labels.append(TAB_PARAMS_LABEL)
     labels.append(TAB_USED_TECH_LABEL)
@@ -302,7 +310,7 @@ with st.sidebar:
                 "background:#e3f2fd;border:1px solid #90caf9;border-radius:6px;"
                 'font-size:0.82rem;line-height:1.4;color:#0d47a1;">'
                 "📄 공정 설명 문서가 마지막 적용 이후 변경되었습니다. "
-                "**📄 공정 설명** 탭에서 **문서에서 파라미터 추출**을 다시 실행하세요.</p>",
+                "**📄 공정 설명** 탭에서 **공정 트리로 추출** 후 **시뮬레이션에 적용**을 다시 실행하세요.</p>",
                 unsafe_allow_html=True,
             )
         if _changed_labels:
@@ -424,6 +432,9 @@ with _tab_by_label[TAB_COMPARE_LABEL]:
 
 with _tab_by_label[TAB_PROCESS_DOC_LABEL]:
     process_description.render()
+
+with _tab_by_label[TAB_PROCESS_TREE_LABEL]:
+    process_tree_view.render_page()
 
 with _tab_by_label[TAB_EXTRACTED_PARAMS_LABEL]:
     process_parameters.render()

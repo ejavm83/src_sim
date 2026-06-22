@@ -39,8 +39,8 @@ def render() -> None:
 
     if st.session_state.get(_LLM_PROPOSED_KEY) is None:
         st.info(
-            "추출된 파라미터가 없습니다. **📄 공정 설명** 탭에서 "
-            "**문서에서 파라미터 추출**을 실행하세요."
+            "추출된 파라미터가 없습니다. **🌳 공정 트리** 탭에서 "
+            "**공정 트리로 추출** 후 **시뮬레이션에 적용**을 실행하세요."
         )
         return
 
