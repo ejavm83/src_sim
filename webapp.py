@@ -15,7 +15,7 @@ from config_sanitize import sanitize_for_simulation, simulation_config_issues
 from report import Analysis, analyze
 from run_compare import MAX_SNAPSHOTS, flatten_config, snapshot
 from simulation import run_simulation
-from ui.app_settings import get_gemini_api_key, session_api_key_name
+from ui.app_settings import sync_gemini_api_key_session
 from ui.compare_panel import render_compare_panel
 from ui.results import render_results
 from ui.sidebar_params import render_config_sidebar
@@ -26,6 +26,7 @@ from views import (
     process_parameters,
     process_tree_view,
     settings,
+    standard_schema_view,
     tech_glossary,
     used_technology,
 )
@@ -91,10 +92,7 @@ if "saved_runs" not in st.session_state:
     st.session_state.snapshot_idx = loaded_idx
 if "snap_name" not in st.session_state:
     st.session_state.snap_name = _default_snapshot_display_name(st.session_state.snapshot_idx)
-if session_api_key_name() not in st.session_state:
-    persisted_key = get_gemini_api_key()
-    if persisted_key:
-        st.session_state[session_api_key_name()] = persisted_key
+sync_gemini_api_key_session()
 
 # 탭 위젯은 본문에서 먼저 만들어지므로, 같은 런의 사이드바 등에서는 이 플래그만 세우고 다음 rerun 초기에
 # `MAIN_TABS_WIDGET_KEY`를 설정한다(Streamlit은 위젯 생성 이후 해당 key의 session_state를 같은 런에서 수정할 수 없음).
@@ -106,20 +104,29 @@ if _pending_default_title is not None:
     st.session_state.snap_name = _pending_default_title
 
 # 앱 버전(사이드바 상단 표기)
-APP_VERSION_INFO = "v0.2.1 (2026.06.22)"
+APP_VERSION_INFO = "v0.2.2 (2026.06.25 16:08)"
 
 # 탭 라벨·세션 키(시뮬 완료 후 시뮬 탭으로 포커스할 때 사용)
 MAIN_TABS_KEY = "main_tabs"
-MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v12"
+MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v13"
 TAB_SIM_LABEL = "🏭 시뮬레이션"
 TAB_COMPARE_LABEL = "🆚 스냅샷 비교"
 TAB_PROCESS_DOC_LABEL = "📄 공정 설명"
 TAB_PROCESS_TREE_LABEL = "🌳 공정 트리"
+TAB_STANDARD_JSON_LABEL = "📐 표준 JSON"
 TAB_EXTRACTED_PARAMS_LABEL = "📊 파라메터"
 TAB_PARAMS_LABEL = "📋 파라미터·단위"
 TAB_USED_TECH_LABEL = "📘 사용 기술"
 TAB_TERMS_LABEL = "🔤 용어·약어"
 TAB_SETTINGS_LABEL = "⚙️ 설정"
+
+
+def _settings_tab_label() -> str:
+    from llm_config import api_key_configured
+
+    if api_key_configured():
+        return f"{TAB_SETTINGS_LABEL} ✅"
+    return f"{TAB_SETTINGS_LABEL} ⚠️"
 _DEV_TABS_VISIBLE_KEY = "dev_tabs_visible"
 _DEV_TABS_TOGGLE_QP = "__dev_tabs_toggle"
 _DOC_BOOTSTRAP_KEY = "_doc_baseline_bootstrapped"
@@ -210,6 +217,7 @@ def _visible_main_tab_labels() -> list[str]:
         TAB_COMPARE_LABEL,
         TAB_PROCESS_DOC_LABEL,
         TAB_PROCESS_TREE_LABEL,
+        TAB_STANDARD_JSON_LABEL,
         TAB_EXTRACTED_PARAMS_LABEL,
     ]
     if st.session_state.get(_DEV_TABS_VISIBLE_KEY, False):
@@ -217,7 +225,7 @@ def _visible_main_tab_labels() -> list[str]:
     labels.append(TAB_USED_TECH_LABEL)
     if st.session_state.get(_DEV_TABS_VISIBLE_KEY, False):
         labels.append(TAB_TERMS_LABEL)
-    labels.append(TAB_SETTINGS_LABEL)
+    labels.append(_settings_tab_label())
     return labels
 
 
@@ -436,6 +444,9 @@ with _tab_by_label[TAB_PROCESS_DOC_LABEL]:
 with _tab_by_label[TAB_PROCESS_TREE_LABEL]:
     process_tree_view.render_page()
 
+with _tab_by_label[TAB_STANDARD_JSON_LABEL]:
+    standard_schema_view.render_page()
+
 with _tab_by_label[TAB_EXTRACTED_PARAMS_LABEL]:
     process_parameters.render()
 
@@ -450,5 +461,5 @@ if TAB_TERMS_LABEL in _tab_by_label:
     with _tab_by_label[TAB_TERMS_LABEL]:
         tech_glossary.render()
 
-with _tab_by_label[TAB_SETTINGS_LABEL]:
+with _tab_by_label[_settings_tab_label()]:
     settings.render()

@@ -22,9 +22,7 @@ from llm_config import (
     FIELDS,
     _SECTION_LABEL,
     _coerce,
-    _generate_json_text,
-    _model_candidates,
-    _resolve_api_key,
+    generate_structured_json,
 )
 
 # json_key -> (sub, attr, jtype, label, unit, hint)
@@ -213,41 +211,7 @@ def extract_process_tree_from_markdown(md_text: str) -> ProcessTree:
     """공정 설명 본문에서 S88 스타일 공정 구조 트리를 추출한다. 실패 시 RuntimeError."""
     if not md_text.strip():
         raise RuntimeError("문서가 비어 있습니다.")
-    api_key = _resolve_api_key()
-    if not api_key:
-        raise RuntimeError(
-            "GEMINI_API_KEY가 설정되지 않았습니다. **⚙️ 설정** 탭에서 키를 등록하거나, "
-            "환경변수·`.streamlit/secrets.toml`로 설정하세요."
-        )
-    try:
-        from google import genai
-        from google.genai import types
-    except ImportError as e:  # noqa: TRY003
-        raise RuntimeError(
-            "`google-genai` 패키지가 필요합니다. `pip install google-genai`"
-        ) from e
-
-    client = genai.Client(api_key=api_key)
-    gen_config = types.GenerateContentConfig(
-        system_instruction=_tree_system_prompt(),
-        temperature=0,
-        response_mime_type="application/json",
-        response_json_schema=_tree_schema(),
-    )
-
-    text = ""
-    errors: list[str] = []
-    for model in _model_candidates():
-        try:
-            text = _generate_json_text(client, model, md_text, gen_config)
-            break
-        except Exception as exc:  # noqa: BLE001
-            errors.append(f"{model}: {exc}")
-    else:
-        raise RuntimeError(
-            "Gemini 모델 호출에 모두 실패했습니다. 잠시 후 다시 시도하세요.\n"
-            + "\n".join(errors)
-        )
+    text = generate_structured_json(_tree_system_prompt(), _tree_schema(), md_text)
 
     try:
         data = json.loads(text)

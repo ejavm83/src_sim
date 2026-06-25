@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any
 
 from config import SimulationConfig
@@ -22,6 +23,8 @@ from config_sanitize import sanitize_for_simulation
 _DEFAULT_MODELS = ("gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.0-flash-lite")
 _RETRYABLE_CODES = frozenset({429, 500, 503})
 _RETRY_DELAYS_SEC = (1.0, 2.0, 4.0)
+# OpenAI 기본 모델(`OPENAI_MODEL` 환경변수로 덮어쓰기 가능)
+_OPENAI_DEFAULT_MODEL = "gpt-4o-mini"
 
 # config.py의 SimulationConfig 필드를 그대로 반영한다.
 # (json_key, (subconfig_attr, field_name), json_type, 라벨, 단위, 힌트)
@@ -254,41 +257,97 @@ def _merge_and_diff(
     return sanitize_for_simulation(new_cfg), changes, extracted
 
 
-def _resolve_api_key() -> str | None:
-    """API 키를 찾는다: 환경변수 → 세션/로컬 설정 → Streamlit Secrets 순."""
-    key = os.environ.get("GEMINI_API_KEY")
-    if key and str(key).strip():
-        return str(key).strip()
+@dataclass(frozen=True)
+class ApiKeyInfo:
+    """현재 제공자의 API 키 해석 결과."""
+
+    key: str | None
+    source: str | None = None
+    provider: str | None = None
+
+    @property
+    def configured(self) -> bool:
+        return self.key is not None
+
+    @property
+    def is_local(self) -> bool:
+        return self.source == "로컬 저장"
+
+    @property
+    def masked(self) -> str | None:
+        if not self.key:
+            return None
+        k = self.key.strip()
+        if len(k) <= 8:
+            return "••••••••"
+        return f"{k[:4]}…{k[-4:]}"
+
+
+_PROVIDER_ENV = {"gemini": "GEMINI_API_KEY", "openai": "OPENAI_API_KEY"}
+
+
+def resolve_provider() -> str:
+    """현재 LLM 제공자: 환경변수 `LLM_PROVIDER` → 로컬 설정 → 기본 gemini."""
+    env = os.environ.get("LLM_PROVIDER", "").strip().lower()
+    if env in _PROVIDER_ENV:
+        return env
     try:
-        from ui.app_settings import get_gemini_api_key, session_api_key_name
+        from ui.app_settings import get_provider
+
+        return get_provider()
+    except Exception:
+        return "gemini"
+
+
+def _resolve_key_for(provider: str) -> tuple[str | None, str | None]:
+    """provider 키를 찾는다: 환경변수 → 세션/로컬 설정 → Streamlit Secrets 순."""
+    env_name = _PROVIDER_ENV.get(provider, "GEMINI_API_KEY")
+    key = os.environ.get(env_name)
+    if key and str(key).strip():
+        return str(key).strip(), "환경 변수"
+    try:
+        from ui.app_settings import get_saved_key, session_api_key_name
 
         import streamlit as st
 
-        sk = st.session_state.get(session_api_key_name())
+        sname = session_api_key_name(provider)
+        sk = st.session_state.get(sname)
         if sk and str(sk).strip():
-            return str(sk).strip()
-        persisted = get_gemini_api_key()
+            return str(sk).strip(), "로컬 저장"
+        persisted = get_saved_key(provider)
         if persisted:
-            return persisted
-        if "GEMINI_API_KEY" in st.secrets:
-            val = str(st.secrets["GEMINI_API_KEY"]).strip()
+            st.session_state[sname] = persisted
+            return persisted, "로컬 저장"
+        if env_name in st.secrets:
+            val = str(st.secrets[env_name]).strip()
             if val:
-                return val
+                return val, "Streamlit Secrets"
     except Exception:
         try:
-            from ui.app_settings import get_gemini_api_key
+            from ui.app_settings import get_saved_key
 
-            persisted = get_gemini_api_key()
+            persisted = get_saved_key(provider)
             if persisted:
-                return persisted
+                return persisted, "로컬 저장"
         except Exception:
             pass
-    return None
+    return None, None
+
+
+def resolve_api_key_info() -> ApiKeyInfo:
+    """현재 제공자의 API 키 해석 결과."""
+    provider = resolve_provider()
+    key, source = _resolve_key_for(provider)
+    return ApiKeyInfo(key, source, provider)
+
+
+def _resolve_api_key() -> str | None:
+    return resolve_api_key_info().key
 
 
 def api_key_configured() -> bool:
-    """Gemini API 키가 어떤 경로로든 설정되어 있는지."""
-    return _resolve_api_key() is not None
+    """현재 제공자의 API 키가 어떤 경로로든 설정되어 있는지."""
+    return resolve_api_key_info().configured
 
 
 def _model_candidates() -> tuple[str, ...]:
@@ -299,6 +358,42 @@ def _model_candidates() -> tuple[str, ...]:
 def _is_retryable(exc: BaseException) -> bool:
     code = getattr(exc, "code", None)
     return isinstance(code, int) and code in _RETRYABLE_CODES
+
+
+def _retry_delay_sec(exc: BaseException, default: float) -> float:
+    """429 응답의 'retry in Xs' 힌트가 있으면 그만큼 대기한다."""
+    msg = str(exc)
+    m = re.search(r"retry in ([\d.]+)s", msg, re.IGNORECASE)
+    if m:
+        try:
+            return max(default, float(m.group(1)) + 0.5)
+        except ValueError:
+            pass
+    return default
+
+
+def _is_quota_exhausted(errors: list[str]) -> bool:
+    joined = "\n".join(errors).lower()
+    return "resource_exhausted" in joined or (
+        "429" in joined and "quota" in joined
+    )
+
+
+def format_gemini_call_errors(errors: list[str]) -> str:
+    """모델 폴백 실패 시 사용자용 메시지."""
+    short = "; ".join(e.split("\n", 1)[0][:120] for e in errors)
+    if _is_quota_exhausted(errors):
+        return (
+            "Gemini API 무료 할당량을 초과했습니다. 잠시 후 다시 시도하거나 "
+            "Google AI Studio에서 사용량·결제 설정을 확인하세요.\n\n"
+            "조치 방법:\n"
+            "· 1~2분 뒤 「공정 트리로 추출」을 다시 시도\n"
+            "· https://aistudio.google.com/ 에서 사용량·한도 확인\n"
+            "· 다른 Google 계정으로 새 API 키 발급 후 ⚙️ 설정에 등록\n"
+            "· 유료 결제 연결 시 일일 한도 증가\n\n"
+            f"({short})"
+        )
+    return "Gemini 모델 호출에 모두 실패했습니다. 잠시 후 다시 시도하세요.\n\n" + short
 
 
 def _generate_json_text(client: Any, model: str, md_text: str, config: Any) -> str:
@@ -320,10 +415,122 @@ def _generate_json_text(client: Any, model: str, md_text: str, config: Any) -> s
             last_exc = exc
             if not _is_retryable(exc) or delay is None:
                 raise
-            time.sleep(delay)
+            time.sleep(_retry_delay_sec(exc, delay))
     if last_exc is not None:
         raise last_exc
     raise RuntimeError("모델 호출에 실패했습니다.")
+
+
+def _no_key_message(provider: str | None) -> str:
+    if provider == "openai":
+        return (
+            "OPENAI_API_KEY가 설정되지 않았습니다. **⚙️ 설정** 탭에서 OpenAI(ChatGPT) 키를 "
+            "등록하거나, 환경변수·`.streamlit/secrets.toml`로 설정하세요."
+        )
+    return (
+        "GEMINI_API_KEY가 설정되지 않았습니다. **⚙️ 설정** 탭에서 키를 등록하거나, "
+        "환경변수·`.streamlit/secrets.toml`로 설정하세요."
+    )
+
+
+def generate_structured_json(
+    system_prompt: str, schema: dict[str, Any], md_text: str
+) -> str:
+    """현재 제공자(Gemini/OpenAI)로 구조화 JSON 텍스트를 생성한다. 실패 시 RuntimeError."""
+    info = resolve_api_key_info()
+    if not info.key:
+        raise RuntimeError(_no_key_message(info.provider))
+    if info.provider == "openai":
+        return _openai_generate(info.key, system_prompt, schema, md_text)
+    return _gemini_generate(info.key, system_prompt, schema, md_text)
+
+
+def _gemini_generate(
+    key: str, system_prompt: str, schema: dict[str, Any], md_text: str
+) -> str:
+    try:
+        from google import genai
+        from google.genai import types
+    except ImportError as e:  # noqa: TRY003
+        raise RuntimeError(
+            "`google-genai` 패키지가 필요합니다. `pip install google-genai`"
+        ) from e
+
+    client = genai.Client(api_key=key)
+    gen_config = types.GenerateContentConfig(
+        system_instruction=system_prompt,
+        temperature=0,
+        response_mime_type="application/json",
+        response_json_schema=schema,
+    )
+    errors: list[str] = []
+    for model in _model_candidates():
+        try:
+            text = _generate_json_text(client, model, md_text, gen_config)
+            if text:
+                return text
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"{model}: {exc}")
+    raise RuntimeError(format_gemini_call_errors(errors))
+
+
+def _openai_retryable(exc: BaseException) -> bool:
+    code = getattr(exc, "status_code", None)
+    return isinstance(code, int) and code in _RETRYABLE_CODES
+
+
+def _openai_error_message(exc: BaseException | None) -> str:
+    code = getattr(exc, "status_code", None)
+    detail = str(exc).split("\n", 1)[0][:160] if exc else ""
+    if code == 401:
+        return "OpenAI API 키가 유효하지 않습니다. **⚙️ 설정**에서 키를 확인하세요.\n\n" + detail
+    if code == 429:
+        return (
+            "OpenAI API 사용량/한도를 초과했습니다. 잠시 후 다시 시도하거나 결제·한도를 확인하세요.\n\n"
+            + detail
+        )
+    return "OpenAI 호출에 실패했습니다. 잠시 후 다시 시도하세요.\n\n" + detail
+
+
+def _openai_generate(
+    key: str, system_prompt: str, schema: dict[str, Any], md_text: str
+) -> str:
+    try:
+        from openai import OpenAI
+    except ImportError as e:  # noqa: TRY003
+        raise RuntimeError("`openai` 패키지가 필요합니다. `pip install openai`") from e
+
+    client = OpenAI(api_key=key)
+    model = os.environ.get("OPENAI_MODEL", "").strip() or _OPENAI_DEFAULT_MODEL
+    last_exc: BaseException | None = None
+    for delay in (*_RETRY_DELAYS_SEC, None):
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                temperature=0,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": md_text},
+                ],
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "extraction",
+                        "schema": schema,
+                        "strict": False,
+                    },
+                },
+            )
+            text = (resp.choices[0].message.content or "").strip()
+            if text:
+                return text
+            raise RuntimeError("모델이 JSON 응답을 반환하지 않았습니다.")
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            if delay is None or not _openai_retryable(exc):
+                raise RuntimeError(_openai_error_message(exc)) from exc
+            time.sleep(delay)
+    raise RuntimeError(_openai_error_message(last_exc))
 
 
 def extract_config_from_markdown(
@@ -340,44 +547,7 @@ def extract_config_from_markdown(
     """
     if not md_text.strip():
         raise RuntimeError("문서가 비어 있습니다.")
-    api_key = _resolve_api_key()
-    if not api_key:
-        raise RuntimeError(
-            "GEMINI_API_KEY가 설정되지 않았습니다. **⚙️ 설정** 탭에서 키를 등록하거나, "
-            "환경변수·`.streamlit/secrets.toml`로 설정하세요."
-        )
-    try:
-        from google import genai
-        from google.genai import types
-    except ImportError as e:  # noqa: TRY003
-        raise RuntimeError(
-            "`google-genai` 패키지가 필요합니다. `pip install google-genai`"
-        ) from e
-
-    client = genai.Client(api_key=api_key)
-    gen_config = types.GenerateContentConfig(
-        system_instruction=_system_prompt(),
-        temperature=0,
-        response_mime_type="application/json",
-        response_json_schema=_schema(),
-    )
-
-    text = ""
-    errors: list[str] = []
-    for model in _model_candidates():
-        try:
-            text = _generate_json_text(client, model, md_text, gen_config)
-            break
-        except Exception as exc:  # noqa: BLE001
-            errors.append(f"{model}: {exc}")
-    else:
-        detail = "\n".join(errors)
-        raise RuntimeError(
-            "Gemini 모델 호출에 모두 실패했습니다. 잠시 후 다시 시도하세요.\n" + detail
-        )
-
-    if not text:
-        raise RuntimeError("모델이 JSON 응답을 반환하지 않았습니다.")
+    text = generate_structured_json(_system_prompt(), _schema(), md_text)
     try:
         data = json.loads(text)
     except json.JSONDecodeError as e:  # noqa: TRY003

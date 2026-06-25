@@ -1,0 +1,503 @@
+{
+  "_meta": {
+    "schema_version": "1.0",
+    "industry": "cable_manufacturing",
+    "created_by": "",
+    "created_at": "",
+    "last_modified_by": "",
+    "last_modified_at": "",
+    "history": []
+  },
+  "product_master": {
+    "product_id": "CV-3C-2.5",
+    "product_name": "CV 3심 2.5mm²",
+    "product_type": "finished",
+    "unit": "m",
+    "standard_weight": 0.385,
+    "outer_diameter": 12.5,
+    "description": "",
+    "status": "active",
+    "cable_design": {
+      "conductor": {
+        "material": "Cu",
+        "cross_section": 2.5,
+        "wire_count": 7,
+        "wire_diameter": 0.67,
+        "stranding_type": "concentric",
+        "lay_direction": "S"
+      },
+      "insulation": {
+        "material": "XLPE",
+        "thickness": 0.7,
+        "core_count": 3,
+        "color_sequence": [
+          "적색",
+          "황색",
+          "녹색"
+        ]
+      },
+      "cabling": {
+        "pitch": 80,
+        "lay_direction": "S",
+        "filler": true,
+        "tape": true
+      },
+      "sheath": {
+        "material": "PVC",
+        "thickness": 1.2,
+        "color": "흑색"
+      }
+    }
+  },
+  "bom": {
+    "product_id": "CV-3C-2.5",
+    "version": "v1.0",
+    "components": [
+      {
+        "component_id": "CORE-INS-2.5",
+        "component_name": "절연심선 2.5mm²",
+        "component_type": "semi",
+        "quantity": 3,
+        "unit": "ea",
+        "loss_rate": 0.01,
+        "parent_id": "CV-3C-2.5"
+      },
+      {
+        "component_id": "CONDUCTOR-2.5",
+        "component_name": "연선도체 2.5mm²",
+        "component_type": "semi",
+        "quantity": 1,
+        "unit": "m",
+        "loss_rate": 0.008,
+        "parent_id": "CORE-INS-2.5"
+      },
+      {
+        "component_id": "WIRE-0.67",
+        "component_name": "소선 0.67mm",
+        "component_type": "semi",
+        "quantity": 7,
+        "unit": "ea",
+        "loss_rate": 0.005,
+        "parent_id": "CONDUCTOR-2.5"
+      },
+      {
+        "component_id": "ROD-CU",
+        "component_name": "동 Rod",
+        "component_type": "material",
+        "quantity": 1.015,
+        "unit": "m",
+        "loss_rate": 0.002,
+        "parent_id": "WIRE-0.67"
+      }
+    ]
+  },
+  "process_routing": {
+    "product_id": "CV-3C-2.5",
+    "version": "v1.0",
+    "steps": [
+      {
+        "step_no": 1,
+        "process_id": "PROC-DRAW",
+        "process_name": "신선",
+        "input_item_id": "ROD-CU",
+        "input_qty_per": 1.015,
+        "output_item_id": "WIRE-0.67",
+        "equipment_group": "GRP-DRAW",
+        "std_speed": 300,
+        "std_time_per": 0.003,
+        "flow_type": "sequential",
+        "next_steps": [
+          {
+            "step_no": 2,
+            "condition": ""
+          }
+        ],
+        "parallel_group_id": "",
+        "join_condition": "",
+        "production_type": "continuous",
+        "pay_off": {
+          "input_count": 1,
+          "min_length": 500,
+          "change_time": 10
+        },
+        "take_up": {
+          "max_length": 5000,
+          "change_time": 15,
+          "traverse": false
+        },
+        "cable_process": {
+          "drawing": {
+            "die_sequence": [
+              {
+                "stage": 1,
+                "die_diameter": 2.8,
+                "reduction_rate": 0.18
+              },
+              {
+                "stage": 2,
+                "die_diameter": 2.3,
+                "reduction_rate": 0.2
+              },
+              {
+                "stage": 3,
+                "die_diameter": 0.67,
+                "reduction_rate": 0.15
+              }
+            ],
+            "lubricant": "에멀전 오일",
+            "cooling_temp": 25,
+            "annealing": true
+          }
+        }
+      },
+      {
+        "step_no": 2,
+        "process_id": "PROC-STRAND",
+        "process_name": "연선",
+        "input_item_id": "WIRE-0.67",
+        "input_qty_per": 1.009,
+        "output_item_id": "CONDUCTOR-2.5",
+        "equipment_group": "GRP-STRAND",
+        "std_speed": 80,
+        "std_time_per": 0.0125,
+        "flow_type": "sequential",
+        "next_steps": [
+          {
+            "step_no": "3a",
+            "condition": ""
+          }
+        ],
+        "parallel_group_id": "",
+        "join_condition": "",
+        "production_type": "batch",
+        "pay_off": {
+          "input_count": 7,
+          "min_length": 300,
+          "change_time": 20
+        },
+        "take_up": {
+          "max_length": 3000,
+          "change_time": 15,
+          "traverse": true
+        },
+        "cable_process": {
+          "stranding": {
+            "pitch": 16,
+            "lay_direction": "S",
+            "bobbin_count": 7,
+            "tension_per_wire": 5,
+            "bind_wire": false
+          }
+        }
+      },
+      {
+        "step_no": "3a",
+        "process_id": "PROC-INS-A",
+        "process_name": "절연압출 (1번심)",
+        "input_item_id": "CONDUCTOR-2.5",
+        "input_qty_per": 1.008,
+        "output_item_id": "CORE-INS-A",
+        "equipment_group": "GRP-EXT",
+        "std_speed": 80,
+        "std_time_per": 0.0125,
+        "flow_type": "parallel",
+        "next_steps": [
+          {
+            "step_no": 4,
+            "condition": ""
+          }
+        ],
+        "parallel_group_id": "PG-CORE-3C",
+        "join_condition": "",
+        "production_type": "continuous",
+        "pay_off": {
+          "input_count": 1,
+          "min_length": 500,
+          "change_time": 15
+        },
+        "take_up": {
+          "max_length": 2500,
+          "change_time": 20,
+          "traverse": true
+        },
+        "cable_process": {
+          "extrusion": {
+            "die_size": "D-42",
+            "nipple_size": "N-18",
+            "draw_ratio": 1.05,
+            "cooling_water_temp": 25,
+            "cooling_length": 8,
+            "color": "적색",
+            "material_lot": ""
+          }
+        }
+      }
+    ]
+  },
+  "work_order": {
+    "wo_id": "WO-2026-001",
+    "product_id": "CV-3C-2.5",
+    "quantity": 5000,
+    "unit": "m",
+    "priority": 1,
+    "order_date": "2026-07-01",
+    "due_date": "2026-07-15",
+    "status": "planned",
+    "plan_id": "PLAN-2026-07",
+    "note": ""
+  },
+  "lot_tracking": {
+    "lot_id": "LOT-2026-0001",
+    "item_id": "CORE-INS-A",
+    "wo_id": "WO-2026-001",
+    "process_id": "PROC-INS-A",
+    "equipment_id": "EXT-003",
+    "created_at": "2026-07-01",
+    "input_lots": [
+      {
+        "lot_id": "LOT-2026-0005",
+        "item_id": "CONDUCTOR-2.5",
+        "quantity": 1230,
+        "unit": "m"
+      }
+    ],
+    "output": {
+      "quantity": 1200,
+      "unit": "m",
+      "weight": 462,
+      "reel_id": "REEL-0042"
+    },
+    "reel_info": {
+      "reel_id": "REEL-0042",
+      "reel_type": "drum",
+      "reel_weight": 45,
+      "gross_weight": 507,
+      "net_weight": 462,
+      "length": 1200,
+      "outer_diameter": 630
+    },
+    "length_tracking": {
+      "input_length": 1230,
+      "output_length": 1200,
+      "loss_length": 30,
+      "loss_rate": 0.024
+    },
+    "status": "available",
+    "next_process_id": "PROC-CABLE",
+    "note": ""
+  },
+  "equipment_master": {
+    "equipment_id": "EXT-003",
+    "equipment_name": "압출기 3호",
+    "equipment_type": "extruder",
+    "process_id": "PROC-INS",
+    "group_id": "GRP-EXT",
+    "capable_range": {
+      "cross_section_min": 0.5,
+      "cross_section_max": 10,
+      "outer_dia_max": 15,
+      "speed_min": 10,
+      "speed_max": 150
+    },
+    "payoff": {
+      "max_weight": 500,
+      "max_diameter": 630,
+      "holder_count": 1
+    },
+    "takeup": {
+      "max_weight": 1000,
+      "max_diameter": 800
+    },
+    "continuous_production": {
+      "is_continuous": true,
+      "min_run_length": 200,
+      "reel_change_time": 20,
+      "line_speed_unit": "m/min"
+    },
+    "status": "available"
+  },
+  "recipe": {
+    "recipe_id": "RCP-EXT003-CV3C25",
+    "product_id": "CV-3C-2.5",
+    "equipment_id": "EXT-003",
+    "process_id": "PROC-INS",
+    "version": "v1.2",
+    "status": "active",
+    "speed": {
+      "fixed": 80,
+      "variable": {
+        "min": 70,
+        "max": 90,
+        "distribution": "uniform"
+      },
+      "mode": "fixed"
+    },
+    "setup_time": 30,
+    "length_factor": {
+      "input_per_output": 1.008,
+      "loss_rate": 0.008
+    },
+    "cable_recipe": {
+      "extrusion": {
+        "temperature_profile": [
+          {
+            "zone": "Z1",
+            "value": 160,
+            "unit": "℃"
+          },
+          {
+            "zone": "Z2",
+            "value": 170,
+            "unit": "℃"
+          },
+          {
+            "zone": "Z3",
+            "value": 175,
+            "unit": "℃"
+          },
+          {
+            "zone": "HEAD",
+            "value": 180,
+            "unit": "℃"
+          }
+        ],
+        "die_size": "D-42",
+        "nipple_size": "N-18",
+        "draw_ratio": 1.05,
+        "cooling_water_temp": 25,
+        "cooling_length": 8,
+        "color": "적색",
+        "material_lot": ""
+      }
+    },
+    "history": []
+  },
+  "quality": {
+    "quality_id": "QC-PROC-INS-CV3C25",
+    "product_id": "CV-3C-2.5",
+    "process_id": "PROC-INS",
+    "inspection_items": [
+      {
+        "item_id": "QCI-001",
+        "item_name": "절연 두께",
+        "unit": "mm",
+        "nominal": 0.7,
+        "upper_limit": 0.8,
+        "lower_limit": 0.6,
+        "method": "online",
+        "frequency": "1회/시간"
+      }
+    ],
+    "defect_types": [
+      {
+        "defect_id": "DEF-001",
+        "defect_name": "두께 미달",
+        "defect_rate": 0.0,
+        "action": "rework"
+      }
+    ]
+  },
+  "workforce": {
+    "shifts": [
+      {
+        "shift_id": "SHIFT-A",
+        "shift_name": "A조 주간",
+        "start_time": "08:00",
+        "end_time": "16:00",
+        "work_days": [
+          "Mon",
+          "Tue",
+          "Wed",
+          "Thu",
+          "Fri"
+        ]
+      },
+      {
+        "shift_id": "SHIFT-B",
+        "shift_name": "B조 오후",
+        "start_time": "16:00",
+        "end_time": "24:00",
+        "work_days": [
+          "Mon",
+          "Tue",
+          "Wed",
+          "Thu",
+          "Fri"
+        ]
+      },
+      {
+        "shift_id": "SHIFT-C",
+        "shift_name": "C조 야간",
+        "start_time": "00:00",
+        "end_time": "08:00",
+        "work_days": [
+          "Mon",
+          "Tue",
+          "Wed",
+          "Thu",
+          "Fri"
+        ]
+      }
+    ],
+    "assignments": [
+      {
+        "process_id": "PROC-INS",
+        "equipment_id": "EXT-003",
+        "shift_id": "SHIFT-A",
+        "headcount": 1,
+        "skill_level": "senior"
+      }
+    ]
+  },
+  "production_plan": {
+    "plan_id": "PLAN-2026-07",
+    "plan_name": "2026년 7월 생산계획",
+    "period": {
+      "start_date": "2026-07-01",
+      "end_date": "2026-07-31"
+    },
+    "daily_plan": [
+      {
+        "date": "2026-07-01",
+        "items": [
+          {
+            "product_id": "CV-3C-2.5",
+            "target_qty": 2000,
+            "unit": "m",
+            "priority": 1,
+            "wo_id": "WO-2026-001",
+            "due_date": "2026-07-15"
+          }
+        ]
+      }
+    ],
+    "monthly_summary": [
+      {
+        "product_id": "CV-3C-2.5",
+        "total_target": 20000,
+        "unit": "m"
+      }
+    ]
+  },
+  "simulation_config": {
+    "config_id": "CFG-001",
+    "config_name": "1차 기본 검증",
+    "description": "이상적 조건 기본 검증",
+    "period": {
+      "start_date": "2026-07-01",
+      "duration_days": 30
+    },
+    "time_unit": "day",
+    "speed_mode": "fixed",
+    "include_breakdown": false,
+    "include_pm": false,
+    "defect_mode": false,
+    "objective": {
+      "primary": "minimize_bottleneck",
+      "secondary": "maximize_utilization",
+      "tertiary": "minimize_wip"
+    },
+    "repeat_count": 1,
+    "random_seed": 42
+  }
+}

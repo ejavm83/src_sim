@@ -39,7 +39,7 @@ def render_page() -> None:
     st.caption(
         "공정 설명 문서를 **배치 → 단계 → 작업 → 파라미터 / 특성** 계층으로 추출해 트리로 보여줍니다. "
         "아래 표에서 **값(수치)만** 고친 뒤 **시뮬레이션에 적용**하면 트리와 사이드바·시뮬에 반영됩니다. "
-        "(Google Gemini API 키 필요 — ⚙️ 설정 탭)"
+        "(LLM API 키 필요 — **⚙️ 설정** 탭에서 Gemini 또는 OpenAI(ChatGPT) 선택·등록)"
     )
 
     current_text = _doc_text()
@@ -58,7 +58,7 @@ def render_page() -> None:
                     tree = extract_process_tree_from_markdown(current_text)
                 except Exception as e:  # noqa: BLE001
                     st.session_state.pop(_TREE_KEY, None)
-                    st.error(f"트리 추출에 실패했습니다: {e}")
+                    st.error(f"트리 추출에 실패했습니다: {e}", icon="⚠️")
                 else:
                     st.session_state[_TREE_KEY] = tree
                     st.session_state.pop(_EDITOR_KEY, None)  # 새 트리 → 편집 표 초기화
