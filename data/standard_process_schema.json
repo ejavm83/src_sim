@@ -6,7 +6,12 @@
     "created_at": "",
     "last_modified_by": "",
     "last_modified_at": "",
-    "history": []
+    "history": [],
+    "extensions": [
+      "process_industry",
+      "cable",
+      "logistics_simulation"
+    ]
   },
   "product_master": {
     "product_id": "CV-3C-2.5",
@@ -499,5 +504,72 @@
     },
     "repeat_count": 1,
     "random_seed": 42
+  },
+  "logistics_process": {
+    "description": "하이브리드 물류 시뮬레이션 파라미터 (시간=분, 중량=톤)",
+    "unit_convention": {
+      "time": "min",
+      "weight": "t",
+      "ratio": "0~1"
+    },
+    "inbound": {
+      "trucks_per_day": 10,
+      "truck_load_ton": 20.0,
+      "arrival_start_min": 540,
+      "arrival_end_min": 1080,
+      "morning_cutoff_min": 720,
+      "morning_share": 0.8,
+      "weigh_in_min": 5.0,
+      "weigh_out_min": 5.0,
+      "unload_min": 20.0,
+      "unloading_bays": 2,
+      "weighbridges": 1
+    },
+    "sorting": {
+      "sort_min_per_truck": 30.0,
+      "subpiles_per_truck": 8,
+      "subpile_ton": 2.5,
+      "blocks_per_subpile": 5,
+      "block_ton": 0.5,
+      "forklift_min_per_block": 5.0,
+      "press_min_per_block": 1.5,
+      "pallet_load_min_per_block": 3.0,
+      "sorters": 2,
+      "presses": 1,
+      "pallet_buffer_cap": 160
+    },
+    "melting": {
+      "batch_ton": 80.0,
+      "pallet_ton": 2.5,
+      "elevator_pallets_per_trip": 2,
+      "elevator_cycle_min": 5.0,
+      "setup_min": 120.0,
+      "melting_min": 780.0,
+      "furnace_count": 2,
+      "elevator_count": 1
+    },
+    "casting": {
+      "flake_ratio": 0.2,
+      "flake_unit_ton": 1.0,
+      "flake_min_per_unit": 3.1,
+      "scr_unit_ton": 4.0,
+      "scr_min_per_unit": 12.5,
+      "holding_setup_min": 60.0,
+      "flake_buffer_cap": 100,
+      "scr_buffer_cap": 75
+    },
+    "outbound": {
+      "truck_interval_min": 60.0,
+      "truck_capacity_ton": 20.0,
+      "flake_truck_prob": 0.2,
+      "weigh_in_min": 5.0,
+      "weigh_out_min": 5.0,
+      "load_min": 12.0,
+      "max_wait_min": 240.0
+    },
+    "simulation": {
+      "sim_days": 7,
+      "random_seed": 42
+    }
   }
 }

@@ -10,7 +10,6 @@ import json
 
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 
 from process_tree import (
     ProcessTree,
@@ -153,10 +152,9 @@ def _render_tree(tree: ProcessTree, md_text: str) -> None:
 
     # ── 좌→우 트리 (가독성용, 값까지 표시) ──
     svg, _w, h = tree_to_svg(tree, eff)
-    components.html(
-        f'<div style="overflow:auto">{svg}</div>',
-        height=min(h + 24, 1000),
-        scrolling=True,
+    st.html(
+        f'<div style="overflow:auto;max-height:{min(h + 24, 1000)}px">{svg}</div>',
+        width="stretch",
     )
 
     if tree.batch_characteristics:

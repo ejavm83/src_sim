@@ -18,7 +18,10 @@ _SCHEMA_PATH = Path(__file__).resolve().parent / "data" / "standard_process_sche
 
 def load_base_schema() -> dict[str, Any]:
     """프로젝트에 저장된 표준 공정 JSON."""
-    return json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+    from standard_schema_bridge import ensure_logistics_section
+
+    data = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+    return ensure_logistics_section(data)
 
 
 def _updates_schema() -> dict[str, Any]:
@@ -48,18 +51,29 @@ def _updates_schema() -> dict[str, Any]:
 
 def _system_prompt(base: dict[str, Any]) -> str:
     return (
-        "당신은 제조 공정의 '표준 JSON'을 한국어 공정 설명 문서로 갱신하는 추출기입니다.\n"
-        "아래 '표준 JSON' 구조를 기준으로, 문서가 '명시'하거나 단일 숫자로 분명히 함의하는 값만 골라 "
-        "그 경로(path)와 값(value)을 updates 배열로 반환하세요.\n\n"
+        "당신은 제조·물류 공정의 '표준 JSON'을 완성하는 전문가입니다.\n"
+        "아래 '표준 JSON' 구조 전체를 검토하고, 두 가지 방식으로 updates 배열을 채우세요.\n\n"
+        "【1】 문서 기반 갱신 — 공정 설명 문서가 명시하거나 수치로 분명히 함의하는 값\n"
+        "【2】 자동 추론 갱신 — 문서 맥락에서 업계 표준·물리 관계·설계 공식으로 합리적으로 결정 가능한 값\n\n"
+        "영역별 우선 매핑:\n"
+        "■ logistics_process.* — 5단계 하이브리드 물류 시뮬(입고·선별·용해·주조·출하). "
+        "공정 설명 MD의 트럭·계근·하역·압착·용해·주조·출하 수치는 이 영역을 우선 갱신하세요.\n"
+        "  예) logistics_process.inbound.trucks_per_day, logistics_process.inbound.unload_min\n"
+        "  예) logistics_process.sorting.press_min_per_block, logistics_process.melting.melting_min\n"
+        "  예) logistics_process.casting.flake_ratio, logistics_process.outbound.truck_capacity_ton\n"
+        "  단위: 시간=분(min), 중량=톤(t), 시각=자정 기준 분(10시→600), 비율=0~1(80%→0.8, 3:7→0.3)\n"
+        "■ product_master / bom / process_routing / recipe 등 — 제품·BOM·케이블 공정(신선·연선·압출) 관련\n"
+        "  예) product_master.cable_design.conductor.cross_section, process_routing.steps[0].std_speed\n\n"
         "규칙:\n"
-        "- path는 표준 JSON의 실제 경로를 점/대괄호로 표기합니다 "
-        "(예: product_master.cable_design.conductor.cross_section, process_routing.steps[0].std_speed).\n"
+        "- path는 표준 JSON의 실제 경로를 점/대괄호로 표기합니다.\n"
         '- value는 항상 문자열로 반환합니다(숫자도 "2.5", 불리언도 "true"). '
-        "표준값 단위에 맞춰 환산하세요(시각→자정 기준 분, 비율→0~1 등).\n"
+        "표준값 단위에 맞춰 환산하세요.\n"
         "- 표준 JSON에 이미 있는 경로만 업데이트합니다. 없는 새 항목은 updates에 넣지 말고 "
         "ambiguous_items에 설명으로 남기세요.\n"
-        "- 문서에 근거가 없으면 추정·생성 금지. 관련 영역만 갱신합니다.\n"
-        "- 문서가 다뤘어야 하는데 빠진 핵심 항목은 missing_fields에, 모호하거나 확인이 필요한 발화는 "
+        "- 파생값(왕복 횟수·시간당 산출량 등)은 추출하지 말고, 입력 파라미터만 갱신하세요.\n"
+        "- 추론 근거가 불확실하거나 가정이 많이 필요한 항목은 updates가 아닌 ambiguous_items에 기재하세요.\n"
+        "- evidence 필드에는 ① 문서 발췌 또는 ② 추론 근거(공식·업계 기준)를 간략히 적습니다.\n"
+        "- 문서가 다뤘어야 하는데 빠진 핵심 항목은 missing_fields에, 모호하거나 확인이 필요한 사항은 "
         "ambiguous_items에 한국어로 적으세요.\n\n"
         "표준 JSON:\n```json\n"
         + json.dumps(base, ensure_ascii=False, indent=2)

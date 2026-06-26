@@ -129,21 +129,24 @@ def session_api_key_name(provider: str = "gemini") -> str:
 
 
 def sync_gemini_api_key_session() -> str | None:
-    """`local_settings.json` 등에 저장된 키를 세션에 올린다(이미 있으면 유지)."""
+    """`local_settings.json`에 저장된 모든 제공자 키를 세션에 올린다(이미 있으면 유지)."""
     try:
         import streamlit as st
     except Exception:
         return get_gemini_api_key()
 
-    name = session_api_key_name()
-    existing = st.session_state.get(name)
-    if existing and str(existing).strip():
-        return str(existing).strip()
+    # 모든 제공자 키를 세션에 올린다
+    for provider in PROVIDERS:
+        name = session_api_key_name(provider)
+        if st.session_state.get(name) and str(st.session_state[name]).strip():
+            continue  # 이미 세션에 있으면 그대로
+        persisted = get_saved_key(provider)
+        if persisted:
+            st.session_state[name] = persisted
 
-    persisted = get_gemini_api_key()
-    if persisted:
-        st.session_state[name] = persisted
-    return persisted
+    # 하위 호환: Gemini 키 반환
+    name = session_api_key_name("gemini")
+    return str(st.session_state[name]).strip() if st.session_state.get(name) else None
 
 
 # ── 제공자(provider) 선택 + 제공자별 키 ──

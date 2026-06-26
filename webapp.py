@@ -8,7 +8,6 @@ from __future__ import annotations
 import time
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from config import DEFAULT_CONFIG, SimulationConfig
 from config_sanitize import sanitize_for_simulation, simulation_config_issues
@@ -21,10 +20,12 @@ from ui.results import render_results
 from ui.sidebar_params import render_config_sidebar
 from ui.snapshot_store import load_saved_snapshots, save_snapshots_to_disk
 from views import (
+    ai_chat_view,
     parameter_reference,
     process_description,
     process_parameters,
     process_tree_view,
+    schema_table_view,
     settings,
     standard_schema_view,
     tech_glossary,
@@ -108,12 +109,14 @@ APP_VERSION_INFO = "v0.2.2 (2026.06.25 16:08)"
 
 # 탭 라벨·세션 키(시뮬 완료 후 시뮬 탭으로 포커스할 때 사용)
 MAIN_TABS_KEY = "main_tabs"
-MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v13"
+MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v15"
 TAB_SIM_LABEL = "🏭 시뮬레이션"
 TAB_COMPARE_LABEL = "🆚 스냅샷 비교"
 TAB_PROCESS_DOC_LABEL = "📄 공정 설명"
 TAB_PROCESS_TREE_LABEL = "🌳 공정 트리"
 TAB_STANDARD_JSON_LABEL = "📐 표준 JSON"
+TAB_SCHEMA_TABLE_LABEL = "📋 공정 데이터"
+TAB_AI_CHAT_LABEL = "💬 AI 어시스턴트"
 TAB_EXTRACTED_PARAMS_LABEL = "📊 파라메터"
 TAB_PARAMS_LABEL = "📋 파라미터·단위"
 TAB_USED_TECH_LABEL = "📘 사용 기술"
@@ -175,7 +178,7 @@ def _bootstrap_doc_extracted_config() -> None:
 
 
 def _handle_dev_tabs_shortcut() -> None:
-    """Shift+F12로 파라미터·단위·용어·약어 탭 표시를 토글한다."""
+    """Shift+F12로 공정 트리·파라미터·단위·용어·약어 탭 표시를 토글한다."""
     if _DEV_TABS_VISIBLE_KEY not in st.session_state:
         st.session_state[_DEV_TABS_VISIBLE_KEY] = False
 
@@ -184,30 +187,24 @@ def _handle_dev_tabs_shortcut() -> None:
         del st.query_params[_DEV_TABS_TOGGLE_QP]
         st.rerun()
 
-    components.html(
+    st.html(
         f"""
         <script>
         (function() {{
-            try {{
-                const w = window.top || window.parent;
-                if (!w || w.__simDevTabsShortcutBound) return;
-                w.__simDevTabsShortcutBound = true;
-                w.addEventListener("keydown", function(e) {{
-                    if (e.shiftKey && e.key === "F12") {{
-                        e.preventDefault();
-                        const url = new URL(w.location.href);
-                        url.searchParams.set("{_DEV_TABS_TOGGLE_QP}", "1");
-                        w.location.href = url.toString();
-                    }}
-                }}, true);
-            }} catch (err) {{
-                // iframe sandbox / cross-origin — 개발자 탭 단축키만 비활성
-            }}
+            if (window.__simDevTabsShortcutBound) return;
+            window.__simDevTabsShortcutBound = true;
+            window.addEventListener("keydown", function(e) {{
+                if (e.shiftKey && e.key === "F12") {{
+                    e.preventDefault();
+                    const url = new URL(window.location.href);
+                    url.searchParams.set("{_DEV_TABS_TOGGLE_QP}", "1");
+                    window.location.href = url.toString();
+                }}
+            }}, true);
         }})();
         </script>
         """,
-        height=0,
-        width=0,
+        unsafe_allow_javascript=True,
     )
 
 
@@ -216,12 +213,18 @@ def _visible_main_tab_labels() -> list[str]:
         TAB_SIM_LABEL,
         TAB_COMPARE_LABEL,
         TAB_PROCESS_DOC_LABEL,
-        TAB_PROCESS_TREE_LABEL,
-        TAB_STANDARD_JSON_LABEL,
-        TAB_EXTRACTED_PARAMS_LABEL,
     ]
     if st.session_state.get(_DEV_TABS_VISIBLE_KEY, False):
-        labels.append(TAB_PARAMS_LABEL)
+        labels.append(TAB_PROCESS_TREE_LABEL)
+    labels.extend(
+        [
+            TAB_STANDARD_JSON_LABEL,
+            TAB_SCHEMA_TABLE_LABEL,
+            TAB_AI_CHAT_LABEL,
+        ]
+    )
+    if st.session_state.get(_DEV_TABS_VISIBLE_KEY, False):
+        labels.extend([TAB_EXTRACTED_PARAMS_LABEL, TAB_PARAMS_LABEL])
     labels.append(TAB_USED_TECH_LABEL)
     if st.session_state.get(_DEV_TABS_VISIBLE_KEY, False):
         labels.append(TAB_TERMS_LABEL)
@@ -441,14 +444,22 @@ with _tab_by_label[TAB_COMPARE_LABEL]:
 with _tab_by_label[TAB_PROCESS_DOC_LABEL]:
     process_description.render()
 
-with _tab_by_label[TAB_PROCESS_TREE_LABEL]:
-    process_tree_view.render_page()
+if TAB_PROCESS_TREE_LABEL in _tab_by_label:
+    with _tab_by_label[TAB_PROCESS_TREE_LABEL]:
+        process_tree_view.render_page()
 
 with _tab_by_label[TAB_STANDARD_JSON_LABEL]:
     standard_schema_view.render_page()
 
-with _tab_by_label[TAB_EXTRACTED_PARAMS_LABEL]:
-    process_parameters.render()
+with _tab_by_label[TAB_SCHEMA_TABLE_LABEL]:
+    schema_table_view.render_page()
+
+with _tab_by_label[TAB_AI_CHAT_LABEL]:
+    ai_chat_view.render_page()
+
+if TAB_EXTRACTED_PARAMS_LABEL in _tab_by_label:
+    with _tab_by_label[TAB_EXTRACTED_PARAMS_LABEL]:
+        process_parameters.render()
 
 if TAB_PARAMS_LABEL in _tab_by_label:
     with _tab_by_label[TAB_PARAMS_LABEL]:

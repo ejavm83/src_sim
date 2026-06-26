@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 _DIAGRAMS_DIR = Path(__file__).resolve().parent / "diagrams"
 
@@ -14,14 +13,13 @@ def _show_diagram(svg_name: str, *, height: int = 420) -> None:
     """미리 생성된 Mermaid SVG를 표시한다(iframe JS 렌더링 대신 정적 SVG 사용)."""
     svg_path = _DIAGRAMS_DIR / svg_name
     svg = svg_path.read_text(encoding="utf-8")
-    components.html(
+    st.html(
         f"""
-        <div style="width:100%;overflow-x:auto;line-height:0">
+        <div style="width:100%;overflow-x:auto;overflow-y:auto;max-height:{height}px;line-height:0">
             {svg}
         </div>
         """,
-        height=height,
-        scrolling=True,
+        width="stretch",
     )
 
 
