@@ -25,11 +25,12 @@ def _doc_text() -> str:
 
 
 def render_page() -> None:
-    st.header("📐 표준 JSON 추출")
+    st.header("📐 표준 JSON")
     st.caption(
-        "범용 제조 **표준 JSON**(L1 Core + 케이블·물류 확장)을 베이스로, **📄 공정 설명** MD에서 "
-        "관련 영역·파라미터를 추출해 갱신합니다. `logistics_process` 변경은 **사이드바 시뮬 파라미터**에 자동 반영됩니다. "
-        "표 형태 편집은 **📋 공정 데이터** 탭을 사용하세요. (LLM API 키 필요 — **⚙️ 설정** 탭)"
+        "**📄 공정 설명** MD를 읽어 해당 도메인에 맞는 표준 JSON을 처음부터 생성합니다. "
+        "어떤 업종·공정이든 MD 내용을 기반으로 구조가 자동 결정됩니다. "
+        "표 형태 편집은 **📋 공정 데이터** 탭, 대화형 수정은 **💬 AI 어시스턴트** 탭을 이용하세요. "
+        "(LLM API 키 필요 — **⚙️ 설정** 탭)"
     )
 
     base = load_base_schema()
@@ -99,12 +100,12 @@ def render_page() -> None:
     res = st.session_state.get(_RESULT_KEY)
     if isinstance(res, dict):
         _render_result(res)
-    else:
-        st.markdown("##### 📄 전체 JSON 구조")
-        c_toggle, _ = st.columns([1, 4])
-        with c_toggle:
-            json_expanded = st.toggle("모두 펼치기", value=True, key="std_schema_json_expand")
-        st.json(base, expanded=json_expanded)
+    elif current_text.strip():
+        st.info(
+            "📄 공정 설명 MD가 준비되어 있습니다. "
+            "**「MD에서 JSON 생성」** 버튼을 눌러 이 도메인에 맞는 표준 JSON을 생성하세요."
+        )
+    # 결과가 없을 때는 고정 스키마를 보여주지 않음
 
 
 def _esc(s: object) -> str:
@@ -411,18 +412,15 @@ def _render_updated_json_html(updated: dict, diffs: list, *, changed_only: bool)
 
 def _render_result(res: dict) -> None:
     diffs = res["diffs"]
-    logistics_n = sum(1 for d in diffs if str(d.get("경로", "")).startswith("logistics_process."))
+    updated = res.get("updated") or {}
     domain = res.get("domain", "")
-    domain_badge = f" — 도메인: **{domain}**" if domain else ""
-    st.subheader(f"업데이트 결과 — 변경 {len(diffs)}건{domain_badge}")
+    domain_badge = f" — **{domain}**" if domain else ""
+    st.subheader(f"생성 결과{domain_badge}")
     if diffs:
         _render_changed_banner(diffs)
-    if logistics_n:
-        st.success(
-            f"물류 시뮬레이션(`logistics_process`) {logistics_n}건이 **사이드바 시뮬 파라미터**에 자동 반영되었습니다."
-        )
-    elif not diffs:
-        st.info("문서에서 표준값과 다른 항목을 찾지 못했습니다.")
+    elif not updated:
+        st.info("문서에서 추출할 항목을 찾지 못했습니다.")
+        return
 
     cols = st.columns(2)
     with cols[0]:
@@ -448,12 +446,21 @@ def _render_result(res: dict) -> None:
     dl_col, _ = st.columns([1, 3])
     with dl_col:
         st.download_button(
-            "업데이트된 JSON 내려받기",
-            data=json.dumps(res["updated"], ensure_ascii=False, indent=2).encode("utf-8"),
-            file_name="process_standard_updated.json",
+            "JSON 내려받기",
+            data=json.dumps(updated, ensure_ascii=False, indent=2).encode("utf-8"),
+            file_name="domain_standard.json",
             mime="application/json",
             use_container_width=True,
         )
 
     st.divider()
-    _render_json_panels(res["updated"], diffs)
+    if diffs:
+        _render_json_panels(updated, diffs)
+    else:
+        # 도메인 생성 모드: diff 없이 전체 JSON만 표시
+        st.markdown("##### 📄 생성된 표준 JSON")
+        json_expanded = st.toggle("모두 펼치기", value=True, key="std_schema_full_json_expand")
+        if json_expanded:
+            _render_json_tree_html(updated, variant="full", max_h=640)
+        else:
+            st.json(updated, expanded=False)
