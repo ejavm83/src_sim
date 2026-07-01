@@ -308,43 +308,27 @@ with st.sidebar:
         st.caption(f"🏷️ **{domain_name}**")
     st.divider()
 
-    _show_params = st.session_state.get(_SHOW_SIM_PARAMS_KEY, False)
-    if st.button(
-        "⚙️ 시뮬 파라미터 보기" if not _show_params else "⚙️ 시뮬 파라미터 접기",
-        key="_toggle_sim_params",
-        use_container_width=True,
-    ):
-        st.session_state[_SHOW_SIM_PARAMS_KEY] = not _show_params
-        st.rerun()
+    st.header("⚙️ 시뮬레이션 파라미터")
+    try:
+        from excel_config import default_excel_path
+        st.caption(f"기본값 파일: `{default_excel_path().name}` (`data/`)")
+    except Exception:
+        st.caption("기본값: 코드 내장")
 
-    if _show_params:
-        st.header("⚙️ 시뮬레이션 파라미터")
-        try:
-            from excel_config import default_excel_path
-            st.caption(f"기본값 파일: `{default_excel_path().name}` (`data/`)")
-        except Exception:
-            st.caption("기본값: 코드 내장")
-
-        from llm_config import EXTRACTED_CHANGE_DETAILS_KEY, EXTRACTED_CHANGED_LABELS_KEY
-        cfg_base = st.session_state.get("extracted_config", DEFAULT_CONFIG)
-        _changed_labels = st.session_state.get(EXTRACTED_CHANGED_LABELS_KEY) or set()
-        _change_details = st.session_state.get(EXTRACTED_CHANGE_DETAILS_KEY) or {}
-        _cfg_nonce = st.session_state.get("config_nonce", 0)
-        cfg = render_config_sidebar(
-            cfg_base,
-            key_suffix=f"_v{_cfg_nonce}",
-            highlight_labels=_changed_labels,
-            change_details=_change_details,
-        )
-        run_btn = st.button("🚀 시뮬레이션 실행", type="primary", use_container_width=True)
-        st.divider()
-        st.text_input("다음 실행 시 저장될 제목", key="snap_name", label_visibility="collapsed")
-    else:
-        from llm_config import EXTRACTED_CHANGE_DETAILS_KEY, EXTRACTED_CHANGED_LABELS_KEY
-        cfg = st.session_state.get("extracted_config", DEFAULT_CONFIG)
-        _changed_labels = st.session_state.get(EXTRACTED_CHANGED_LABELS_KEY) or set()
-        _change_details = st.session_state.get(EXTRACTED_CHANGE_DETAILS_KEY) or {}
-        run_btn = False
+    from llm_config import EXTRACTED_CHANGE_DETAILS_KEY, EXTRACTED_CHANGED_LABELS_KEY
+    cfg_base = st.session_state.get("extracted_config", DEFAULT_CONFIG)
+    _changed_labels = st.session_state.get(EXTRACTED_CHANGED_LABELS_KEY) or set()
+    _change_details = st.session_state.get(EXTRACTED_CHANGE_DETAILS_KEY) or {}
+    _cfg_nonce = st.session_state.get("config_nonce", 0)
+    cfg = render_config_sidebar(
+        cfg_base,
+        key_suffix=f"_v{_cfg_nonce}",
+        highlight_labels=_changed_labels,
+        change_details=_change_details,
+    )
+    run_btn = st.button("🚀 시뮬레이션 실행", type="primary", use_container_width=True)
+    st.divider()
+    st.text_input("다음 실행 시 저장될 제목", key="snap_name", label_visibility="collapsed")
 
 if st.session_state.get("_save_toast"):
     st.toast(st.session_state.pop("_save_toast"), icon="💾")
@@ -393,13 +377,11 @@ if run_btn:
 with _tab_by_label[TAB_SIM_LABEL]:
     domain_analysis_view.render_page()
 
-    # 시뮬 파라미터가 열려 있고 SimPy 실행 결과가 있을 때 추가 표시
-    if st.session_state.get(_SHOW_SIM_PARAMS_KEY):
-        run = st.session_state.last_run
-        if run is not None:
-            st.divider()
-            st.markdown("#### 🏭 물류 시뮬레이션 상세 결과")
-            render_results(run["metrics"], run["cfg"], run["analysis"])
+    run = st.session_state.last_run
+    if run is not None:
+        st.divider()
+        st.markdown("#### 🏭 물류 시뮬레이션 상세 결과")
+        render_results(run["metrics"], run["cfg"], run["analysis"])
 
 with _tab_by_label[TAB_COMPARE_LABEL]:
     st.markdown(
