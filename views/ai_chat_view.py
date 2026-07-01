@@ -334,6 +334,7 @@ def _handle_message(user_msg: str) -> None:
     if result["md_updated"].strip():
         _apply_md_update(result["md_updated"])
         meta["md_changed"] = True
+        st.session_state["_ai_md_changed"] = True
 
     # toast 메시지 준비 (rerun 후 표시)
     parts = []
@@ -454,6 +455,70 @@ def render_page() -> None:
 
     if prompt := st.chat_input("대화 내용을 JSON·MD에 보완 반영해 달라고 요청하세요...", key=_CHAT_INPUT_KEY):
         _handle_message(prompt)
+
+    # ── 변경 내용 확인 패널 ──
+    ai_paths: set[str] = st.session_state.get("_ai_changed_paths") or set()
+    result = st.session_state.get("std_schema_result")
+    cur_md  = _current_md()
+    md_changed = st.session_state.get("_ai_md_changed", False)
+
+    has_json_change = bool(ai_paths and isinstance(result, dict))
+    has_md_change   = bool(md_changed and cur_md.strip())
+
+    if has_json_change or has_md_change:
+        st.divider()
+        st.markdown("#### 🔍 변경 내용 확인")
+
+        if has_json_change and has_md_change:
+            tab_j, tab_m = st.tabs(["📊 변경된 JSON", "📝 변경된 MD"])
+        elif has_json_change:
+            tab_j = st.container()
+            tab_m = None
+        else:
+            tab_j = None
+            tab_m = st.container()
+
+        if has_json_change and tab_j is not None:
+            with tab_j:
+                diffs = result.get("diffs") or []
+                ai_diffs = [d for d in diffs if d.get("경로") in ai_paths]
+                patch_paths = [p for p in ai_paths if not any(d.get("경로") == p for d in diffs)]
+
+                if ai_diffs:
+                    st.markdown("**값 변경 항목**")
+                    rows_data = [
+                        {"경로": d["경로"], "이전 값": str(d["표준값"]), "변경 후": str(d["추출값"])}
+                        for d in ai_diffs
+                    ]
+                    import pandas as pd
+                    st.dataframe(
+                        pd.DataFrame(rows_data),
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "경로":   st.column_config.TextColumn("경로", width="large"),
+                            "이전 값": st.column_config.TextColumn("이전 값", width="small"),
+                            "변경 후": st.column_config.TextColumn("변경 후", width="small"),
+                        },
+                    )
+                if patch_paths:
+                    st.markdown("**구조 변경 경로**")
+                    for p in patch_paths:
+                        st.markdown(f"- `{p}`")
+
+                with st.expander("전체 JSON 보기", expanded=False):
+                    st.json(result.get("updated", {}), expanded=1)
+
+        if has_md_change and tab_m is not None:
+            with tab_m:
+                st.text_area(
+                    "현재 공정 설명(MD) 전체",
+                    value=cur_md,
+                    height=400,
+                    disabled=True,
+                    label_visibility="collapsed",
+                )
+                st.caption("수정 내용이 **📄 공정 설명** 탭에도 반영되어 있습니다.")
 
     if history:
         if st.button("🗑️ 대화 초기화", key="ai_chat_clear"):
