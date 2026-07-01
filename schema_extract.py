@@ -190,3 +190,78 @@ def apply_updates(
                 }
             )
     return updated, diffs, skipped
+
+
+# ── 도메인 독립적 JSON 생성 ──────────────────────────────────────────────────────
+
+def _domain_wrapper_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "domain": {"type": "string"},
+            "json_content": {"type": "string"},
+            "missing_fields": {"type": "array", "items": {"type": "string"}},
+            "ambiguous_items": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["domain", "json_content", "missing_fields", "ambiguous_items"],
+        "additionalProperties": False,
+    }
+
+
+def _domain_system_prompt() -> str:
+    return (
+        "당신은 어떤 도메인의 문서든 읽고 그 내용에 최적화된 표준 JSON을 처음부터 설계·완성하는 전문가입니다.\n\n"
+        "주어진 문서의 도메인·업종·공정을 파악하고, 해당 분야에 맞는 구조화된 JSON을 설계·완성하세요.\n\n"
+        "설계 원칙:\n"
+        "1. 문서의 도메인을 파악하고 그에 맞는 최상위 섹션을 결정하세요.\n"
+        "2. 문서에서 언급된 모든 공정 단계·설비·파라미터·품질 기준·수치를 포함하세요.\n"
+        "3. 문서에 명시된 값은 정확히 채우고, 해당 업계 표준으로 추론 가능한 값도 포함하세요.\n"
+        "4. 값이 없거나 불확실한 항목은 null로 두세요.\n"
+        "5. JSON 키는 영문 snake_case, 값은 한국어·영어 혼용 가능합니다.\n\n"
+        "반드시 포함할 최상위 섹션 (도메인에 맞게 구성):\n"
+        "- _meta: domain명, doc_summary, version\n"
+        "- process_overview: 공정/서비스 개요, 목적, 산출물\n"
+        "- process_steps: 단계별 상세 배열 (name, description, duration_min, equipment, parameters)\n"
+        "- materials_or_inputs: 원자재·입력물 (spec, unit, quantity)\n"
+        "- equipment_or_resources: 설비·도구·인력 (count, capacity, unit)\n"
+        "- quality_standards: 품질 기준·검사 항목·합격 기준\n"
+        "- production_parameters: 처리량·효율 관련 핵심 수치\n"
+        "- simulation_parameters: 시뮬레이션에 활용할 정량적 파라미터\n\n"
+        "json_content 필드에 완성된 JSON을 유효한 JSON 문자열로 반환하세요.\n"
+        "domain 필드에 도메인명을 한 줄로 적어주세요 (예: '자동차 전선 제조').\n"
+        "문서에서 파악이 어렵거나 모호한 항목은 ambiguous_items에 한국어로 적어주세요.\n"
+        "중요하지만 문서에 누락된 항목은 missing_fields에 한국어로 적어주세요.\n"
+    )
+
+
+def generate_domain_json(md_text: str) -> dict[str, Any]:
+    """MD 내용으로부터 도메인에 맞는 표준 JSON을 처음부터 생성한다.
+
+    반환값은 std_schema_result와 동일한 구조:
+    {updated, diffs, skipped, missing, ambiguous, domain}
+    """
+    from llm_config import generate_structured_json
+
+    if not md_text.strip():
+        raise RuntimeError("문서가 비어 있습니다.")
+
+    text = generate_structured_json(_domain_system_prompt(), _domain_wrapper_schema(), md_text)
+    try:
+        wrapper = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"모델 응답을 JSON으로 해석하지 못했습니다: {e}") from e
+
+    json_str = wrapper.get("json_content") or "{}"
+    try:
+        domain_json = json.loads(json_str)
+    except json.JSONDecodeError:
+        domain_json = {"_meta": {"domain": wrapper.get("domain", ""), "parse_error": True}, "_raw": json_str[:800]}
+
+    return {
+        "updated": domain_json,
+        "diffs": [],
+        "skipped": [],
+        "missing": wrapper.get("missing_fields") or [],
+        "ambiguous": wrapper.get("ambiguous_items") or [],
+        "domain": wrapper.get("domain", ""),
+    }

@@ -7,7 +7,7 @@ import json
 import pandas as pd
 import streamlit as st
 
-from schema_extract import apply_updates, extract_schema_updates, load_base_schema
+from schema_extract import apply_updates, extract_schema_updates, generate_domain_json, load_base_schema
 from config_sanitize import sanitize_for_simulation
 from standard_schema_bridge import logistics_to_config
 
@@ -35,15 +35,34 @@ def render_page() -> None:
     base = load_base_schema()
     current_text = _doc_text()
 
-    c1, _ = st.columns([1, 3])
+    c1, c2, _ = st.columns([1, 1, 2])
     with c1:
         if st.button(
-            "MD에서 추출·업데이트",
+            "MD에서 JSON 생성",
             type="primary",
             disabled=not current_text.strip(),
             key=_BTN_KEY,
             use_container_width=True,
-            help="표준 JSON 구조에 맞춰 문서가 명시한 값만 추출해 표준값을 갱신합니다.",
+            help="MD 내용을 분석해 도메인에 맞는 표준 JSON을 처음부터 생성합니다.",
+        ):
+            with st.spinner("도메인 JSON을 생성하는 중..."):
+                try:
+                    result = generate_domain_json(current_text)
+                except Exception as e:  # noqa: BLE001
+                    st.session_state.pop(_RESULT_KEY, None)
+                    st.error(f"생성에 실패했습니다: {e}")
+                else:
+                    st.session_state[_MD_CHANGED_PATHS_KEY] = set()
+                    st.session_state[_RESULT_KEY] = result
+                    if result.get("domain"):
+                        st.session_state["_domain_name"] = result["domain"]
+    with c2:
+        if st.button(
+            "기존 스키마 업데이트",
+            disabled=not current_text.strip(),
+            key=f"{_BTN_KEY}_legacy",
+            use_container_width=True,
+            help="고정된 표준 스키마를 베이스로 MD에서 값만 추출해 업데이트합니다.",
         ):
             with st.spinner("표준 JSON을 문서로 업데이트하는 중..."):
                 try:
@@ -393,7 +412,9 @@ def _render_updated_json_html(updated: dict, diffs: list, *, changed_only: bool)
 def _render_result(res: dict) -> None:
     diffs = res["diffs"]
     logistics_n = sum(1 for d in diffs if str(d.get("경로", "")).startswith("logistics_process."))
-    st.subheader(f"업데이트 결과 — 변경 {len(diffs)}건")
+    domain = res.get("domain", "")
+    domain_badge = f" — 도메인: **{domain}**" if domain else ""
+    st.subheader(f"업데이트 결과 — 변경 {len(diffs)}건{domain_badge}")
     if diffs:
         _render_changed_banner(diffs)
     if logistics_n:

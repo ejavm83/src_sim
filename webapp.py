@@ -21,6 +21,7 @@ from ui.sidebar_params import render_config_sidebar
 from ui.snapshot_store import load_saved_snapshots, save_snapshots_to_disk
 from views import (
     ai_chat_view,
+    domain_analysis_view,
     parameter_reference,
     process_description,
     process_parameters,
@@ -105,12 +106,12 @@ if _pending_default_title is not None:
     st.session_state.snap_name = _pending_default_title
 
 # 앱 버전(사이드바 상단 표기)
-APP_VERSION_INFO = "v0.2.3 (2026.07.01 09:49)"
+APP_VERSION_INFO = "v0.3.0-generic (2026.07.01)"
 
 # 탭 라벨·세션 키(시뮬 완료 후 시뮬 탭으로 포커스할 때 사용)
 MAIN_TABS_KEY = "main_tabs"
-MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v15"
-TAB_SIM_LABEL = "🏭 시뮬레이션"
+MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v16"
+TAB_SIM_LABEL = "🔬 분석 결과"
 TAB_COMPARE_LABEL = "🆚 스냅샷 비교"
 TAB_PROCESS_DOC_LABEL = "📄 공정 설명"
 TAB_PROCESS_TREE_LABEL = "🌳 공정 트리"
@@ -273,7 +274,7 @@ st.markdown(
     '<p class="app-title app-title-home" role="button" tabindex="0" '
     'title="홈 (새로고침)" '
     'onclick="window.parent.location.reload()">'
-    "🏭 공정 물류 시뮬레이션</p>",
+    "🔬 공정 분석 플랫폼</p>",
     unsafe_allow_html=True,
 )
 
@@ -297,71 +298,52 @@ _tab_ctxs = st.tabs(
 _tab_by_label = dict(zip(_tab_labels, _tab_ctxs, strict=True))
 
 
+_SHOW_SIM_PARAMS_KEY = "_show_sim_params"
+
 with st.sidebar:
     st.caption(APP_VERSION_INFO)
+    domain_name = st.session_state.get("_domain_name", "")
+    if domain_name:
+        st.caption(f"🏷️ **{domain_name}**")
     st.divider()
-    st.header("⚙️ 시뮬레이션 파라미터")
-    try:
-        from excel_config import default_excel_path
 
-        st.caption(f"기본값 파일: `{default_excel_path().name}` (`data/`)")
-    except Exception:
-        st.caption("기본값: 코드 내장( `data` 에 `.xlsx` 없음 )")
+    _show_params = st.session_state.get(_SHOW_SIM_PARAMS_KEY, False)
+    if st.button(
+        "⚙️ 시뮬 파라미터 보기" if not _show_params else "⚙️ 시뮬 파라미터 접기",
+        key="_toggle_sim_params",
+        use_container_width=True,
+    ):
+        st.session_state[_SHOW_SIM_PARAMS_KEY] = not _show_params
+        st.rerun()
 
-    # 공정 설명 문서에서 추출·적용한 값이 있으면 그걸 기본값으로 쓴다(없으면 엑셀·코드 기본).
-    from llm_config import EXTRACTED_CHANGE_DETAILS_KEY, EXTRACTED_CHANGED_LABELS_KEY
+    if _show_params:
+        st.header("⚙️ 시뮬레이션 파라미터")
+        try:
+            from excel_config import default_excel_path
+            st.caption(f"기본값 파일: `{default_excel_path().name}` (`data/`)")
+        except Exception:
+            st.caption("기본값: 코드 내장")
 
-    cfg_base = st.session_state.get("extracted_config", DEFAULT_CONFIG)
-    _changed_labels = st.session_state.get(EXTRACTED_CHANGED_LABELS_KEY) or set()
-    _change_details = st.session_state.get(EXTRACTED_CHANGE_DETAILS_KEY) or {}
-    if "extracted_config" in st.session_state:
-        if st.session_state.pop("_doc_md_stale", False):
-            st.markdown(
-                '<p style="margin:0 0 0.35rem 0;padding:0.45rem 0.55rem;'
-                "background:#e3f2fd;border:1px solid #90caf9;border-radius:6px;"
-                'font-size:0.82rem;line-height:1.4;color:#0d47a1;">'
-                "📄 공정 설명 문서가 마지막 적용 이후 변경되었습니다. "
-                "**📄 공정 설명** 탭에서 **공정 트리로 추출** 후 **시뮬레이션에 적용**을 다시 실행하세요.</p>",
-                unsafe_allow_html=True,
-            )
-        if _changed_labels:
-            st.markdown(
-                f'<p style="margin:0 0 0.35rem 0;padding:0.45rem 0.55rem;'
-                "background:#fff3e0;border:1px solid #fcd34d;border-radius:6px;"
-                'font-size:0.82rem;line-height:1.4;color:#92400e;">'
-                f"📄 문서 추출로 <strong>{len(_changed_labels)}개</strong> 항목이 변경되었습니다. "
-                "아래 주황 표시·펼쳐진 섹션을 확인하세요.</p>",
-                unsafe_allow_html=True,
-            )
-            with st.expander("변경 내역 보기", expanded=True):
-                for label in sorted(_changed_labels):
-                    det = _change_details.get(label, {})
-                    st.markdown(
-                        f"- **{label}**: {det.get('기존값', '?')} → **{det.get('추출값', '?')}**"
-                    )
-        else:
-            st.caption("📄 **공정 설명** 문서에서 추출한 값이 기본으로 반영되어 있습니다.")
-    _cfg_nonce = st.session_state.get("config_nonce", 0)
-    cfg = render_config_sidebar(
-        cfg_base,
-        key_suffix=f"_v{_cfg_nonce}",
-        highlight_labels=_changed_labels,
-        change_details=_change_details,
-    )
-
-    run_btn = st.button("🚀 시뮬레이션 실행", type="primary", use_container_width=True)
-
-    st.divider()
-    st.markdown("**💾 결과 스냅샷**")
-    st.caption(
-        "실행이 끝나면 자동으로 저장됩니다. 같은 설정으로 다시 돌리면 **이미 있는 항목의 결과만 갱신**되고 "
-        "이름은 그대로 둡니다. 이름 바꾸기·삭제는 **🆚 스냅샷 비교** 탭 상단에서 할 수 있습니다."
-    )
-    st.text_input(
-        "다음 실행 시 저장될 제목",
-        key="snap_name",
-        label_visibility="collapsed",
-    )
+        from llm_config import EXTRACTED_CHANGE_DETAILS_KEY, EXTRACTED_CHANGED_LABELS_KEY
+        cfg_base = st.session_state.get("extracted_config", DEFAULT_CONFIG)
+        _changed_labels = st.session_state.get(EXTRACTED_CHANGED_LABELS_KEY) or set()
+        _change_details = st.session_state.get(EXTRACTED_CHANGE_DETAILS_KEY) or {}
+        _cfg_nonce = st.session_state.get("config_nonce", 0)
+        cfg = render_config_sidebar(
+            cfg_base,
+            key_suffix=f"_v{_cfg_nonce}",
+            highlight_labels=_changed_labels,
+            change_details=_change_details,
+        )
+        run_btn = st.button("🚀 시뮬레이션 실행", type="primary", use_container_width=True)
+        st.divider()
+        st.text_input("다음 실행 시 저장될 제목", key="snap_name", label_visibility="collapsed")
+    else:
+        from llm_config import EXTRACTED_CHANGE_DETAILS_KEY, EXTRACTED_CHANGED_LABELS_KEY
+        cfg = st.session_state.get("extracted_config", DEFAULT_CONFIG)
+        _changed_labels = st.session_state.get(EXTRACTED_CHANGED_LABELS_KEY) or set()
+        _change_details = st.session_state.get(EXTRACTED_CHANGE_DETAILS_KEY) or {}
+        run_btn = False
 
 if st.session_state.get("_save_toast"):
     st.toast(st.session_state.pop("_save_toast"), icon="💾")
@@ -408,25 +390,15 @@ if run_btn:
 
 
 with _tab_by_label[TAB_SIM_LABEL]:
-    run = st.session_state.last_run
+    domain_analysis_view.render_page()
 
-    if run is None:
-        st.info("👈 사이드바에서 파라미터를 조정하고 **시뮬레이션 실행** 버튼을 누르세요.")
-        st.markdown(
-            "핵심 기술 쉬운 설명은 **📘 사용 기술** 탭에서 확인할 수 있습니다. "
-            "공정 서술은 **📄 공정 설명** 탭에서 `data/공정설명260521.md` 내용을 보거나 편집·저장할 수 있습니다."
-        )
-        if st.session_state.saved_runs:
-            st.caption(
-                f"💾 이전에 저장한 실행 {len(st.session_state.saved_runs)}건이 있습니다. "
-                "**🆚 스냅샷 비교** 탭에서 KPI·설정·추이를 비교할 수 있습니다."
-            )
-    else:
-        render_results(
-            run["metrics"],
-            run["cfg"],
-            run["analysis"],
-        )
+    # 시뮬 파라미터가 열려 있고 SimPy 실행 결과가 있을 때 추가 표시
+    if st.session_state.get(_SHOW_SIM_PARAMS_KEY):
+        run = st.session_state.last_run
+        if run is not None:
+            st.divider()
+            st.markdown("#### 🏭 물류 시뮬레이션 상세 결과")
+            render_results(run["metrics"], run["cfg"], run["analysis"])
 
 with _tab_by_label[TAB_COMPARE_LABEL]:
     st.markdown(
