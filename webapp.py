@@ -41,9 +41,10 @@ def _default_snapshot_display_name(snapshot_idx: int) -> str:
 
 
 st.set_page_config(
-    page_title="공정 시뮬레이션",
-    page_icon="🏭",
+    page_title="공정 분석 플랫폼",
+    page_icon="🔬",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
 # 슬라이더 트랙 양끝 라벨 숨김 + 상단 헤더·탭 간격 축소
