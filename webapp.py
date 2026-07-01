@@ -105,7 +105,7 @@ if _pending_default_title is not None:
     st.session_state.snap_name = _pending_default_title
 
 # 앱 버전(사이드바 상단 표기)
-APP_VERSION_INFO = "v0.2.2 (2026.06.25 16:08)"
+APP_VERSION_INFO = "v0.2.3 (2026.07.01 09:49)"
 
 # 탭 라벨·세션 키(시뮬 완료 후 시뮬 탭으로 포커스할 때 사용)
 MAIN_TABS_KEY = "main_tabs"
