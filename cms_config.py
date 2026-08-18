@@ -242,11 +242,19 @@ class CmsConfig:
     calendar: CalendarConfig = field(default_factory=CalendarConfig)
     pallet: PalletConfig = field(default_factory=PalletConfig)
 
+    # 사양 JSON에서 주입된 라우팅. 비어 있으면 아래 코드 기본값을 쓴다.
+    routes: dict[str, Line] | None = None
+
     @property
     def sim_horizon_min(self) -> int:
         return int(self.sim_days * 24 * 60)
 
     def lines(self) -> dict[str, Line]:
+        if self.routes:
+            return self.routes
+        return self._default_lines()
+
+    def _default_lines(self) -> dict[str, Line]:
         return {
             "CU44": Line("CU44", "Cu44 (44/0.29)", _cu44_steps(shielded=False), "#4C78A8"),
             "CU44S": Line("CU44S", "Cu44 차폐 SKU", _cu44_steps(shielded=True), "#3B6BA5"),

@@ -71,8 +71,40 @@ class CmsAnalysis:
         return self.wip_end > self.wip_start * 1.5 + 10
 
 
+def line_inputs_per_month(cfg: CmsConfig) -> dict[str, float]:
+    """라인별로 한 달에 라우팅 첫 단계로 들어오는 로트 수.
+
+    앞단(태신선·멀티신선·Cu19 3단 꼬임)은 산문 규칙이라 `flow` 값으로 계산한다.
+    """
+    cond, inb = cfg.conductor, cfg.inbound
+
+    rod_bobbins = inb.cu_trucks_per_month * inb.cu_ton_per_truck / cond.taeshin_bobbin_ton
+    batches = rod_bobbins * cond.carriers_per_bobbin / cond.multi_carriers_per_batch
+    total_cycle = max(1, cond.cycle_cu44 + cond.cycle_cu19)
+    b44 = batches * cond.cycle_cu44 / total_cycle
+    b19 = batches * cond.cycle_cu19 / total_cycle
+
+    # Cu44: 멀티신선이 낸 소선 보빈이 연선(라우팅 첫 단계)으로 들어간다
+    cu44_bobbins = b44 * cond.multi_cu44_bobbins
+    # Cu19: 집합·연선을 거쳐 튜블러가 낸 다발이 절연(라우팅 첫 단계)으로 들어간다
+    pairs = b19 * cond.multi_cu19_bobbins / 2
+    cu19_lots = pairs * cond.tubular_out_lots
+
+    return {
+        "CU44": cu44_bobbins * (1.0 - cfg.cu44_shield_ratio),
+        "CU44S": cu44_bobbins * cfg.cu44_shield_ratio,
+        "CU19": cu19_lots,
+        "AL16": inb.al_days * (inb.al_ton_per_day / 0.2),
+        "SIL": cfg.sil_month_m / 1_000 / 5,   # 5,000m 로트가 1,000m ×5로 갈라짐
+    }
+
+
 def _monthly_demand_min(cfg: CmsConfig) -> dict[str, float]:
-    """SOP 입고량 기준으로 설비별 월 요구 가공시간(분)을 정적으로 계산한다."""
+    """설비별 월 요구 가공시간(분).
+
+    **라우팅을 따라 걸으며** 계산하므로, 사양(JSON·MD)의 공정 단계를 고치면
+    이 값도 함께 바뀐다. 앞단 공유 설비만 `flow` 값으로 따로 더한다.
+    """
     cond, inb = cfg.conductor, cfg.inbound
     av = cfg.calendar.availability
     d: dict[str, float] = {}
@@ -80,62 +112,32 @@ def _monthly_demand_min(cfg: CmsConfig) -> dict[str, float]:
     def add(key: str, minutes: float) -> None:
         d[key] = d.get(key, 0.0) + minutes / av
 
-    # ── Cu 앞단 ──
-    rod_ton = inb.cu_trucks_per_month * inb.cu_ton_per_truck
-    rod_bobbins = rod_ton / cond.taeshin_bobbin_ton
+    # ── 앞단(산문 규칙 구간) ──
+    rod_bobbins = inb.cu_trucks_per_month * inb.cu_ton_per_truck / cond.taeshin_bobbin_ton
     add("taeshin", rod_bobbins * cond.taeshin_min_per_bobbin)
 
     batches = rod_bobbins * cond.carriers_per_bobbin / cond.multi_carriers_per_batch
-    total_cycle = cond.cycle_cu44 + cond.cycle_cu19
+    total_cycle = max(1, cond.cycle_cu44 + cond.cycle_cu19)
     b44 = batches * cond.cycle_cu44 / total_cycle
     b19 = batches * cond.cycle_cu19 / total_cycle
     add("multi", b44 * cond.multi_cu44_min + b19 * cond.multi_cu19_min)
 
-    # ── Cu44 ──
-    wire44_m = b44 * cond.multi_cu44_bobbins * cond.multi_cu44_len_m
-    cable44_m = wire44_m * 0.96          # 100,000m → 24,000m ×4 (SOP 7.3)
-    lots44 = cable44_m / 24_000
-    add("strand", lots44 * 400.0)
-    add("ins_ext", lots44 * 150.0)
-    add("irradiator", lots44 * 116.5)
-
-    shield_m = cable44_m * cfg.cu44_shield_ratio
-    shield_lots = shield_m / 12_000       # 24,000m → 12,000m ×2
-    add("braider", shield_lots * 8_000.0)
-    add("taping", shield_lots * 600.0)
-    add("sheath_ext", shield_lots * 200.0)
-    add("irradiator", shield_lots * 61.5)  # 조사 ② — SOP 질문 #19
-    add("rewind1050", cable44_m / 50.0)    # 50m/min
-
-    # ── Cu19 ──
-    wire19_m = b19 * cond.multi_cu19_bobbins * cond.multi_cu19_len_m
-    bobbins19 = wire19_m / cond.multi_cu19_len_m
+    bobbins19 = b19 * cond.multi_cu19_bobbins
     add("bunch19", bobbins19 * cond.bunch19_min)
     add("strand", bobbins19 / 2 * cond.strand19_min)   # 절반만 연선 (SOP 7.2)
-    pairs = bobbins19 / 2
-    add("tubular", pairs * cond.tubular_min)
-    cable19_m = pairs * cond.tubular_out_lots * cond.tubular_out_len_m
-    lots19 = cable19_m / 5_000
-    add("ins_ext", lots19 * 83.3)
-    add("irradiator", lots19 * 33.3)
-    add("rewind1250", lots19 * 100.0)
+    add("tubular", bobbins19 / 2 * cond.tubular_min)
 
-    # ── AL16 ──
-    al_bobbins = inb.al_days * (inb.al_ton_per_day / 0.2)
-    add("multi_al", al_bobbins * cond.multi_al_min)
-    add("bunch_al_dbl", al_bobbins * 8.0)
-    add("bunch_al_sgl", al_bobbins * 18.2)
-    add("bunch_al_fin", al_bobbins * 12.5)
-    add("ins_ext", al_bobbins * 8.0)
-    add("irradiator", al_bobbins * 3.6)
-    add("rewind1050", al_bobbins * 8.0)
+    add("multi_al", inb.al_days * (inb.al_ton_per_day / 0.2) * cond.multi_al_min)
 
-    # ── 실리콘 HV ──
-    sil_lots = cfg.sil_month_m / 1_000
-    add("sil_ext", cfg.sil_month_m / 5_000 * 50.0)
-    add("sil_braider", sil_lots * 666.7)
-    add("sil_taping", sil_lots * 50.0)
-    add("sil_sheath", sil_lots * 66.7)
+    # ── 라우팅 구간: 로트가 분할되며 흐르는 대로 따라 걷는다 ──
+    lines = cfg.lines()
+    for key, lots in line_inputs_per_month(cfg).items():
+        line = lines.get(key)
+        if line is None:
+            continue
+        for step in line.steps:
+            lots *= step.split
+            add(step.equip, lots * step.minutes)
 
     return d
 

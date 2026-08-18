@@ -1,0 +1,548 @@
+{
+  "_meta": {
+    "spec_version": "1.0",
+    "name": "멕시코 CMS 전선공장",
+    "source_doc": "공정설명260521.md",
+    "derived_from_markdown": true
+  },
+  "calendar": {
+    "hours_per_day": 24.0,
+    "weekend_stop_hours": 52.0,
+    "monday_startup_hours": 3.0,
+    "availability": 0.926
+  },
+  "equipment": [
+    {
+      "key": "taeshin",
+      "label": "태신선기",
+      "count": 1,
+      "setup_min": 120.0,
+      "shared_by": [
+        "CU44",
+        "CU19"
+      ],
+      "tbd_count": false
+    },
+    {
+      "key": "multi",
+      "label": "멀티신선기",
+      "count": 1,
+      "setup_min": 120.0,
+      "shared_by": [
+        "CU44",
+        "CU19"
+      ],
+      "tbd_count": false
+    },
+    {
+      "key": "bunch19",
+      "label": "집합기(Cu19)",
+      "count": 10,
+      "setup_min": 120.0,
+      "shared_by": [
+        "CU19"
+      ],
+      "tbd_count": false
+    },
+    {
+      "key": "strand",
+      "label": "연선기",
+      "count": 6,
+      "setup_min": 120.0,
+      "shared_by": [
+        "CU44",
+        "CU19"
+      ],
+      "tbd_count": false
+    },
+    {
+      "key": "tubular",
+      "label": "튜블러연선기",
+      "count": 1,
+      "setup_min": 120.0,
+      "shared_by": [
+        "CU19"
+      ],
+      "tbd_count": false
+    },
+    {
+      "key": "multi_al",
+      "label": "멀티신선기(AL)",
+      "count": 1,
+      "setup_min": 120.0,
+      "shared_by": [
+        "AL16"
+      ],
+      "tbd_count": true
+    },
+    {
+      "key": "bunch_al_dbl",
+      "label": "집합기(AL·더블)",
+      "count": 1,
+      "setup_min": 120.0,
+      "shared_by": [
+        "AL16"
+      ],
+      "tbd_count": true
+    },
+    {
+      "key": "bunch_al_sgl",
+      "label": "집합기(AL·싱글)",
+      "count": 12,
+      "setup_min": 120.0,
+      "shared_by": [
+        "AL16"
+      ],
+      "tbd_count": false
+    },
+    {
+      "key": "bunch_al_fin",
+      "label": "집합기(AL·합사)",
+      "count": 1,
+      "setup_min": 120.0,
+      "shared_by": [
+        "AL16"
+      ],
+      "tbd_count": true
+    },
+    {
+      "key": "ins_ext",
+      "label": "절연압출기",
+      "count": 2,
+      "setup_min": 60.0,
+      "shared_by": [
+        "CU44",
+        "CU19",
+        "AL16"
+      ],
+      "tbd_count": false
+    },
+    {
+      "key": "irradiator",
+      "label": "조사기",
+      "count": 1,
+      "setup_min": 30.0,
+      "shared_by": [
+        "CU44",
+        "CU19",
+        "AL16"
+      ],
+      "tbd_count": false
+    },
+    {
+      "key": "braider",
+      "label": "편조기(Cu)",
+      "count": 21,
+      "setup_min": 60.0,
+      "shared_by": [
+        "CU44",
+        "SIL"
+      ],
+      "tbd_count": false
+    },
+    {
+      "key": "taping",
+      "label": "테이핑기",
+      "count": 4,
+      "setup_min": 30.0,
+      "shared_by": [
+        "CU44",
+        "SIL"
+      ],
+      "tbd_count": false
+    },
+    {
+      "key": "sheath_ext",
+      "label": "시스압출기",
+      "count": 2,
+      "setup_min": 60.0,
+      "shared_by": [
+        "CU44",
+        "SIL"
+      ],
+      "tbd_count": false
+    },
+    {
+      "key": "rewind1050",
+      "label": "재권취기(1050Φ)",
+      "count": 2,
+      "setup_min": 30.0,
+      "shared_by": [
+        "CU44",
+        "AL16"
+      ],
+      "tbd_count": false
+    },
+    {
+      "key": "rewind1250",
+      "label": "재권취기(1250Φ)",
+      "count": 2,
+      "setup_min": 30.0,
+      "shared_by": [
+        "CU19"
+      ],
+      "tbd_count": false
+    },
+    {
+      "key": "sil_ext",
+      "label": "실리콘 압출기",
+      "count": 2,
+      "setup_min": 60.0,
+      "shared_by": [
+        "SIL"
+      ],
+      "tbd_count": false
+    },
+    {
+      "key": "sil_braider",
+      "label": "편조기(실리콘)",
+      "count": 10,
+      "setup_min": 60.0,
+      "shared_by": [
+        "SIL"
+      ],
+      "tbd_count": true
+    },
+    {
+      "key": "sil_taping",
+      "label": "테이핑기(실리콘)",
+      "count": 2,
+      "setup_min": 30.0,
+      "shared_by": [
+        "SIL"
+      ],
+      "tbd_count": true
+    },
+    {
+      "key": "sil_sheath",
+      "label": "시스압출기(실리콘)",
+      "count": 2,
+      "setup_min": 60.0,
+      "shared_by": [
+        "SIL"
+      ],
+      "tbd_count": true
+    },
+    {
+      "key": "inspect",
+      "label": "검사(육안)",
+      "count": 4,
+      "setup_min": 0.0,
+      "shared_by": [
+        "CU44",
+        "CU19",
+        "AL16",
+        "SIL"
+      ],
+      "tbd_count": true
+    }
+  ],
+  "routes": {
+    "CU44": {
+      "label": "Cu44 (44/0.29)",
+      "color": "#4C78A8",
+      "steps": [
+        {
+          "seq": "2.4",
+          "label": "연선(도체 꼬임 완성)",
+          "equip": "strand",
+          "minutes": 400.0,
+          "split": 4,
+          "out_len_m": 24000.0
+        },
+        {
+          "seq": "3.1",
+          "label": "절연 압출",
+          "equip": "ins_ext",
+          "minutes": 150.0,
+          "out_len_m": 24000.0
+        },
+        {
+          "seq": "3.3",
+          "label": "조사 1차(전자빔 가교) — 조사기 1대(전 라인 공유)",
+          "equip": "irradiator",
+          "minutes": 116.50485436893204,
+          "out_len_m": 24000.0
+        },
+        {
+          "seq": "6.1",
+          "label": "재권취(1050Φ)",
+          "equip": "rewind1050",
+          "minutes": 12.2,
+          "split": 39,
+          "out_len_m": 610.0
+        },
+        {
+          "seq": "6.2",
+          "label": "검사 및 적재(육안)",
+          "equip": "inspect",
+          "minutes": 10.0,
+          "out_len_m": 610.0,
+          "tbd_time": true
+        }
+      ]
+    },
+    "CU44S": {
+      "label": "Cu44 차폐 SKU",
+      "color": "#3B6BA5",
+      "steps": [
+        {
+          "seq": "2.4",
+          "label": "연선(도체 꼬임 완성)",
+          "equip": "strand",
+          "minutes": 400.0,
+          "split": 4,
+          "out_len_m": 24000.0
+        },
+        {
+          "seq": "3.1",
+          "label": "절연 압출",
+          "equip": "ins_ext",
+          "minutes": 150.0,
+          "out_len_m": 24000.0
+        },
+        {
+          "seq": "3.3",
+          "label": "조사 1차(전자빔 가교) — 조사기 1대(전 라인 공유)",
+          "equip": "irradiator",
+          "minutes": 116.50485436893204,
+          "out_len_m": 24000.0
+        },
+        {
+          "seq": "4.1",
+          "label": "CU 편조기(차폐)",
+          "equip": "braider",
+          "minutes": 8000.0,
+          "split": 2,
+          "out_len_m": 12000.0
+        },
+        {
+          "seq": "4.2",
+          "label": "테이핑기",
+          "equip": "taping",
+          "minutes": 600.0,
+          "out_len_m": 12000.0
+        },
+        {
+          "seq": "5.1",
+          "label": "쉬스 압출(자켓)",
+          "equip": "sheath_ext",
+          "minutes": 200.0,
+          "out_len_m": 12000.0
+        },
+        {
+          "seq": "5.2",
+          "label": "조사 2차(쉬스 가교) — 조사기 1대(공유)",
+          "equip": "irradiator",
+          "minutes": 61.53846153846154,
+          "out_len_m": 12000.0
+        },
+        {
+          "seq": "6.1",
+          "label": "재권취(1050Φ)",
+          "equip": "rewind1050",
+          "minutes": 12.2,
+          "split": 19,
+          "out_len_m": 610.0
+        },
+        {
+          "seq": "6.2",
+          "label": "검사 및 적재(육안)",
+          "equip": "inspect",
+          "minutes": 10.0,
+          "out_len_m": 610.0,
+          "tbd_time": true
+        }
+      ]
+    },
+    "CU19": {
+      "label": "Cu19 (19/9/0.315)",
+      "color": "#F58518",
+      "steps": [
+        {
+          "seq": "3.1",
+          "label": "절연 압출",
+          "equip": "ins_ext",
+          "minutes": 83.33333333333333,
+          "split": 4,
+          "out_len_m": 5000.0
+        },
+        {
+          "seq": "3.3",
+          "label": "조사(전자빔 가교) — 조사기 1대(공유)",
+          "equip": "irradiator",
+          "minutes": 33.333333333333336,
+          "out_len_m": 5000.0
+        },
+        {
+          "seq": "6.1",
+          "label": "재권취(1250Φ)",
+          "equip": "rewind1250",
+          "minutes": 2.0,
+          "split": 50,
+          "out_len_m": 100.0
+        },
+        {
+          "seq": "6.2",
+          "label": "검사 및 적재(육안)",
+          "equip": "inspect",
+          "minutes": 10.0,
+          "out_len_m": 100.0,
+          "tbd_time": true
+        }
+      ]
+    },
+    "AL16": {
+      "label": "AL16 (16㎟)",
+      "color": "#54A24B",
+      "steps": [
+        {
+          "seq": "2.3",
+          "label": "집합기(더블)",
+          "equip": "bunch_al_dbl",
+          "minutes": 4.0,
+          "out_len_m": 400.0
+        },
+        {
+          "seq": "2.3",
+          "label": "집합(싱글) 1~12호기",
+          "equip": "bunch_al_sgl",
+          "minutes": 9.090909090909092,
+          "out_len_m": 400.0
+        },
+        {
+          "seq": "2.3",
+          "label": "집합(싱글) 최종(합사)",
+          "equip": "bunch_al_fin",
+          "minutes": 12.5,
+          "out_len_m": 400.0
+        },
+        {
+          "seq": "3.1",
+          "label": "절연 압출",
+          "equip": "ins_ext",
+          "minutes": 8.0,
+          "out_len_m": 400.0
+        },
+        {
+          "seq": "3.3",
+          "label": "조사(전자빔 가교)",
+          "equip": "irradiator",
+          "minutes": 3.6363636363636362,
+          "out_len_m": 400.0
+        },
+        {
+          "seq": "6.1",
+          "label": "재권취(고객 사양 분할)",
+          "equip": "rewind1050",
+          "minutes": 8.0,
+          "out_len_m": 400.0
+        },
+        {
+          "seq": "6.2",
+          "label": "검사 완료 적재",
+          "equip": "inspect",
+          "minutes": 10.0,
+          "out_len_m": 400.0,
+          "tbd_time": true
+        }
+      ]
+    },
+    "SIL": {
+      "label": "실리콘 HV",
+      "color": "#E45756",
+      "steps": [
+        {
+          "seq": "3.2",
+          "label": "실리콘 압출기(절연 압출)",
+          "equip": "sil_ext",
+          "minutes": 50.0,
+          "split": 5,
+          "out_len_m": 1000.0
+        },
+        {
+          "seq": "4.1",
+          "label": "편조기(차폐 편조)",
+          "equip": "sil_braider",
+          "minutes": 666.6666666666666,
+          "out_len_m": 1000.0
+        },
+        {
+          "seq": "4.2",
+          "label": "테이핑기(금속 테이프 차폐)",
+          "equip": "sil_taping",
+          "minutes": 50.0,
+          "out_len_m": 1000.0
+        },
+        {
+          "seq": "5.1",
+          "label": "쉬스 압출(최외곽 자켓)",
+          "equip": "sil_sheath",
+          "minutes": 66.66666666666667,
+          "out_len_m": 1000.0
+        },
+        {
+          "seq": "6.2",
+          "label": "검사(품질 확인)",
+          "equip": "inspect",
+          "minutes": 10.0,
+          "out_len_m": 1000.0
+        }
+      ]
+    }
+  },
+  "inbound": {
+    "cu_trucks_per_month": 13,
+    "cu_ton_per_truck": 19.8,
+    "cu_arrival_window_days": 5.0,
+    "al_days": 12,
+    "al_ton_per_day": 2.0,
+    "sil_interval_days": 14.0,
+    "sil_ton_per_delivery": 5.0,
+    "sil_m_per_ton": 14000.0
+  },
+  "flow": {
+    "taeshin": {
+      "bobbin_ton": 3.3,
+      "min_per_bobbin": 60.0,
+      "carriers_per_bobbin": 3
+    },
+    "multi_cycle": {
+      "carriers_per_batch": 24,
+      "cu44": {
+        "repeat": 4,
+        "minutes": 83.3,
+        "bobbins": 9,
+        "len_m": 100000
+      },
+      "cu19": {
+        "repeat": 1,
+        "minutes": 66.7,
+        "bobbins": 11,
+        "len_m": 80000
+      }
+    },
+    "cu19_triple_twist": {
+      "bunch_min": 800.0,
+      "strand_min": 1333.3,
+      "strand_share": 0.5,
+      "tubular_min": 181.8,
+      "tubular_out_lots": 4,
+      "tubular_out_len_m": 20000
+    },
+    "al_multi": {
+      "minutes": 144.0,
+      "len_m": 40000
+    }
+  },
+  "pallet": {
+    "cu44_bobbins_per_pallet": 18,
+    "cu19_bundles_per_pallet": 45
+  },
+  "scenario": {
+    "sim_days": 30,
+    "random_seed": 42,
+    "cu44_shield_ratio": 0.2,
+    "sil_month_m": 350000.0
+  }
+}

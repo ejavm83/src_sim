@@ -79,3 +79,34 @@ def missing_images(md: str, base_dir: Path) -> list[str]:
         if not (base_dir / src).is_file():
             out.append(src)
     return out
+
+
+def split_by_images(md: str, base_dir: Path) -> list[tuple[str, str, str]]:
+    """마크다운을 이미지 기준으로 쪼갠다.
+
+    돌려주는 각 조각은 `("md", 본문, "")` 또는 `("img", 파일경로, 대체텍스트)`이고,
+    파일이 없으면 `("miss", 참조경로, "")`가 된다.
+
+    `st.image()`로 그리기 위한 것 — base64를 HTML에 끼워 넣으면 Streamlit의
+    HTML 정화기에 걸릴 수 있고 문서 한 편이 수 MB로 불어난다.
+    """
+    parts: list[tuple[str, str, str]] = []
+    pos = 0
+    for m in _IMG_RE.finditer(md):
+        if m.start() > pos:
+            parts.append(("md", md[pos : m.start()], ""))
+        pos = m.end()
+
+        alt = re.sub(r"<[^>]+>", "", m.group("alt")).strip()
+        path = (base_dir / m.group("src")).resolve()
+        try:
+            path.relative_to(base_dir.resolve())
+        except ValueError:
+            parts.append(("miss", m.group("src"), ""))
+            continue
+        parts.append(("img", str(path), alt) if path.is_file()
+                     else ("miss", m.group("src"), ""))
+
+    if pos < len(md):
+        parts.append(("md", md[pos:], ""))
+    return parts

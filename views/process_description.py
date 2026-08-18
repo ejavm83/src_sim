@@ -7,7 +7,7 @@ from pathlib import Path
 import streamlit as st
 
 from views.process_doc_highlight import markdown_for_preview
-from views.process_doc_images import embed_local_images, missing_images
+from views.process_doc_images import missing_images, split_by_images
 
 # 공정 모델별 설명 문서. 사이드바에서 고른 모델에 따라 바뀐다.
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -191,10 +191,16 @@ def render() -> None:
                     + " · ".join(f"`{p}`" for p in missing[:8])
                     + f"\n\n원본 폴더의 `images/`를 `data/images/`로 복사하면 그림이 표시됩니다."
                 )
-            st.markdown(
-                embed_local_images(markdown_for_preview(body), DOC.parent),
-                unsafe_allow_html=True,
-            )
+            # 본문은 마크다운으로, 그림은 `st.image`로 나눠 그린다.
+            # (HTML에 base64를 끼워 넣으면 Streamlit 정화기에 걸려 배포본에서 깨진다)
+            for kind, payload, alt in split_by_images(body, DOC.parent):
+                if kind == "md":
+                    if payload.strip():
+                        st.markdown(markdown_for_preview(payload), unsafe_allow_html=True)
+                elif kind == "img":
+                    st.image(payload, caption=alt or None, use_container_width=True)
+                else:
+                    st.caption(f"(그림 파일 없음: `{payload}`)")
         else:
             st.info("파일이 비어 있거나 없습니다. **편집**을 눌러 내용을 작성하세요.")
         _, btn_col = st.columns([4, 1])

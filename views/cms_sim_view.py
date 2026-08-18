@@ -17,25 +17,83 @@ from cms_simulation import run_cms_simulation
 _RUN_KEY = "cms_last_run"
 
 
+def _render_spec_panel() -> None:
+    """공정 사양(MD 표에서 생성) 상태와 재생성 버튼."""
+    from pathlib import Path
+
+    from process_spec import DEFAULT_SPEC_PATH, load_spec, save_spec, validate_spec
+    from spec_from_md import spec_from_markdown
+    from views.process_description import doc_path
+
+    with st.expander("📐 공정 사양 — 이 시뮬레이션이 무엇을 읽고 있나", expanded=False):
+        st.caption(
+            "설비 목록과 라인별 라우팅·단계 시간은 코드가 아니라 **사양 파일**에 들어 있고, "
+            "그 사양은 **공정 설명 MD의 표**에서 만들어집니다. "
+            "MD의 「6.1 설비 마스터」·「5.1~5.4 라우팅」·「7.3 로트 변환」 표를 고친 뒤 "
+            "아래 버튼을 누르면 코드 수정 없이 시뮬레이션이 바뀝니다."
+        )
+
+        if not DEFAULT_SPEC_PATH.is_file():
+            st.warning("사양 파일이 없습니다. 아래 버튼으로 MD에서 생성하세요.")
+        else:
+            spec = load_spec()
+            steps = sum(len(r.get("steps", [])) for r in spec.get("routes", {}).values())
+            st.markdown(
+                f"- 파일: `{DEFAULT_SPEC_PATH.relative_to(Path.cwd()) if DEFAULT_SPEC_PATH.is_relative_to(Path.cwd()) else DEFAULT_SPEC_PATH.name}`\n"
+                f"- 설비 **{len(spec.get('equipment', []))}종** · "
+                f"라인 **{len(spec.get('routes', {}))}개** · 공정 단계 **{steps}개**\n"
+                f"- 출처 문서: `{spec.get('_meta', {}).get('source_doc', '?')}`"
+            )
+
+        if st.button("📄 공정 설명 MD에서 사양 다시 생성", use_container_width=True):
+            doc = doc_path()
+            if not doc.is_file():
+                st.error(f"공정 설명 문서를 찾지 못했습니다: {doc.name}")
+            else:
+                base = load_spec() if DEFAULT_SPEC_PATH.is_file() else None
+                new_spec, notes = spec_from_markdown(
+                    doc.read_text(encoding="utf-8"), base=base
+                )
+                problems = validate_spec(new_spec)
+                if problems:
+                    st.error("사양이 올바르지 않아 저장하지 않았습니다:")
+                    for p in problems[:10]:
+                        st.markdown(f"- {p}")
+                else:
+                    save_spec(new_spec)
+                    st.success(
+                        f"사양을 다시 만들었습니다 — 설비 {len(new_spec['equipment'])}종 · "
+                        f"단계 {sum(len(r['steps']) for r in new_spec['routes'].values())}개. "
+                        "사이드바 값이 갱신되도록 화면을 새로고침하세요."
+                    )
+                for n in notes:
+                    st.info(n)
+
+
 def _render_changed_from_sop(cfg: CmsConfig) -> None:
-    """SOP 기재값과 달라진 설정을 알려 준다 — 결과를 SOP 탓으로 오해하지 않도록."""
+    """사양(MD 기재값)과 달라진 설정을 알려 준다 — 결과를 SOP 탓으로 오해하지 않도록."""
+    from ui.cms_sidebar import spec_config
+
+    ref = spec_config()
     diffs: list[str] = []
     for key, spec in cfg.equipment.items():
-        base = DEFAULT_CMS_CONFIG.equipment[key]
+        base = ref.equipment.get(key)
+        if base is None:
+            continue
         if spec.count != base.count:
             diffs.append(f"{spec.label} {base.count}대 → **{spec.count}대**")
-    if cfg.cu44_shield_ratio != DEFAULT_CMS_CONFIG.cu44_shield_ratio:
+    if cfg.cu44_shield_ratio != ref.cu44_shield_ratio:
         diffs.append(
-            f"차폐 비율 {DEFAULT_CMS_CONFIG.cu44_shield_ratio:.0%} → "
+            f"차폐 비율 {ref.cu44_shield_ratio:.0%} → "
             f"**{cfg.cu44_shield_ratio:.0%}**"
         )
-    if cfg.inbound.cu_trucks_per_month != DEFAULT_CMS_CONFIG.inbound.cu_trucks_per_month:
+    if cfg.inbound.cu_trucks_per_month != ref.inbound.cu_trucks_per_month:
         diffs.append(
-            f"Cu 월 트럭 {DEFAULT_CMS_CONFIG.inbound.cu_trucks_per_month}대 → "
+            f"Cu 월 트럭 {ref.inbound.cu_trucks_per_month}대 → "
             f"**{cfg.inbound.cu_trucks_per_month}대**"
         )
     if diffs:
-        st.info("SOP 기재값에서 바꾼 설정 — " + " · ".join(diffs))
+        st.info("사양(MD) 기재값에서 바꾼 설정 — " + " · ".join(diffs))
 
 
 def _render_capacity(a: CmsAnalysis) -> None:
@@ -134,6 +192,7 @@ def render_page(cfg: CmsConfig | None = None, run: bool = False) -> None:
     )
 
     cfg = cfg or DEFAULT_CMS_CONFIG
+    _render_spec_panel()
     _render_changed_from_sop(cfg)
 
     if run:

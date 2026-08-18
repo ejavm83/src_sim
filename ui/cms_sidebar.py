@@ -32,9 +32,26 @@ def _count(cfg: CmsConfig, key: str, label: str, hi: int, help: str = "") -> int
     )
 
 
+def spec_config() -> CmsConfig:
+    """공정 사양 파일(`data/process_spec_cms.json`)에서 기본 설정을 만든다.
+
+    사양은 공정 설명 MD의 표에서 생성된 것이라, MD를 고치고 다시 생성하면
+    설비·라우팅·단계 시간이 코드 수정 없이 바뀐다. 파일이 없거나 깨졌으면
+    코드 내장 기본값으로 물러난다.
+    """
+    try:
+        from process_spec import DEFAULT_SPEC_PATH, load_config
+
+        if DEFAULT_SPEC_PATH.is_file():
+            return load_config()
+    except Exception as exc:  # 사양이 깨져도 앱은 떠야 한다
+        st.warning(f"공정 사양을 읽지 못해 코드 기본값을 씁니다: {exc}")
+    return DEFAULT_CMS_CONFIG
+
+
 def render_cms_sidebar(base: CmsConfig | None = None) -> tuple[CmsConfig, bool]:
     """CMS 파라미터를 그리고 (설정, 실행버튼눌림)을 돌려준다."""
-    cfg = base or DEFAULT_CMS_CONFIG
+    cfg = base or spec_config()
     eq = {k: replace(v) for k, v in cfg.equipment.items()}
     cal, inb, cond, pal = cfg.calendar, cfg.inbound, cfg.conductor, cfg.pallet
 
