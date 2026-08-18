@@ -37,6 +37,7 @@ def _analysis_schema() -> dict[str, Any]:
         "type": "object",
         "properties": {
             "summary": {"type": "string"},
+            "detail": {"type": "string"},
             "domain": {"type": "string"},
             "kpis": {
                 "type": "array",
@@ -96,7 +97,7 @@ def _analysis_schema() -> dict[str, Any]:
             },
             "simulation_insights": {"type": "string"},
         },
-        "required": ["summary", "kpis", "bottlenecks", "recommendations"],
+        "required": ["summary", "detail", "kpis", "bottlenecks", "recommendations"],
         "additionalProperties": False,
     }
 
@@ -108,7 +109,10 @@ def _system_prompt(domain_json: dict, md_text: str) -> str:
         "당신은 공정·업무 프로세스 분석 전문가입니다.\n"
         "아래 공정 설명(MD)과 표준 JSON을 분석해 KPI·병목·개선안을 도출하세요.\n\n"
         "분석 요구사항:\n"
-        "- summary: 전체 공정을 2~3문장으로 요약\n"
+        "- summary: 전체 공정을 2~3문장으로 요약 (한눈에 읽는 개요)\n"
+        "- detail: 공정 상세 설명 — 원자재 입고부터 출하까지 흐름을 따라 단계별로, "
+        "각 단계가 무엇을 하는 곳이고 어떤 설비·수치가 나오는지 일반인도 이해할 수 있게 "
+        "마크다운(소제목·목록)으로 풀어서 설명. 문서에 있는 실제 수치를 인용\n"
         "- domain: 도메인명 한 줄\n"
         "- kpis: 주요 성과지표 5~10개 (처리량, 리드타임, 효율, 불량률 등)\n"
         "  status는 good/warning/bad 중 하나\n"
@@ -180,9 +184,13 @@ def render_page() -> None:
         )
         return
 
-    # ── 요약 ──
+    # ── 요약 · 상세 설명 ──
     if result.get("summary"):
+        st.markdown("#### 📝 공정 요약")
         st.info(result["summary"])
+    if result.get("detail"):
+        with st.expander("📖 공정 상세 설명 — 단계별로 풀어 보기", expanded=False):
+            st.markdown(result["detail"])
 
     # ── KPI ──
     kpis = result.get("kpis") or []
