@@ -130,6 +130,7 @@ def _render_delta_bar_chart(
             {
                 "KPI": d["label"],
                 "Δ% (기준 대비)": round(pct, 1),
+                "표시": f"{pct:+.1f}%",
                 "방향": direction,
             }
         )
@@ -142,9 +143,10 @@ def _render_delta_bar_chart(
         color="방향",
         orientation="h",
         color_discrete_map={"개선": "#2e7d32", "악화": "#c62828", "변화": "#1565c0"},
-        text="Δ% (기준 대비)",
+        text="표시",
     )
-    fig.update_traces(texttemplate="%{x:+.1f}%", textposition="outside")
+    # Plotly 숫자 서식은 '+' 기호를 지원하지 않아(콘솔 경고) 문자열로 미리 만들어 넘긴다
+    fig.update_traces(textposition="outside")
     fig.update_layout(
         template="plotly_white",
         height=max(240, 58 * len(rows)),
