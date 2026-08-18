@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "streamlit-web",
-      "runtimeExecutable": ".venv/Scripts/python.exe",
-      "runtimeArgs": ["-m", "streamlit", "run", "webapp.py"],
-      "port": 8501
+      "name": "webapp",
+      "runtimeExecutable": ".venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-m", "streamlit", "run", "webapp.py", "--server.port", "8531", "--server.headless", "true"],
+      "port": 8531
     }
   ]
 }

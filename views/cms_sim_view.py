@@ -222,6 +222,99 @@ def _render_output(a: CmsAnalysis) -> None:
         st.caption(f"완성 파렛트 (SOP 7.6 — Cu44 18보빈 / Cu19 45다발): {pal}")
 
 
+def _render_kpis(a: CmsAnalysis, cfg: CmsConfig) -> None:
+    """핵심 KPI 4장 — 각 카드의 **🧮 근거**를 누르면 실제 숫자가 든 수식이 뜬다."""
+    st.caption("각 카드 아래 **🧮 근거**를 누르면 그 숫자가 어떻게 나왔는지 수식으로 보여 줍니다.")
+    k1, k2, k3, k4 = st.columns(4)
+
+    with k1:
+        st.metric("총 생산량", f"{a.total_m/1_000_000:.2f}M m")
+        with st.popover("🧮 근거", use_container_width=True):
+            st.markdown("**무엇인가요?** 시뮬레이션 기간 동안 재권취(최종 검사)까지 끝난 전선 길이의 합계입니다.")
+            st.markdown("**어떻게 계산했나요?** 라인별 완성 길이를 전부 더합니다.")
+            parts = [
+                f"{LINE_LABELS.get(key, key)} {m:,.0f}m"
+                for key, m in a.finished_m.items()
+                if m
+            ]
+            st.markdown(
+                "`" + " + ".join(parts) + f" = {a.total_m:,.0f}m`\n\n"
+                f"`{a.total_m:,.0f}m ÷ 1,000,000 = {a.total_m/1_000_000:.2f}M m`"
+            )
+
+    with k2:
+        cal = cfg.calendar
+        week_up_h = 24 * 7 - cal.weekend_stop_hours - cal.monday_startup_hours
+        st.metric("가동 가능 시간", f"{a.uptime_min/60:,.0f} h", help="주말 정지·월요일 스타트업 제외")
+        with st.popover("🧮 근거", use_container_width=True):
+            st.markdown(
+                "**무엇인가요?** 캘린더(SOP 6.3)상 설비가 실제로 돌 수 있는 시간입니다. "
+                "주말 정지와 월요일 스타트업은 뺍니다."
+            )
+            st.markdown(
+                f"**어떻게 계산했나요?**\n\n"
+                f"`1주 = 168h − 주말 정지 {cal.weekend_stop_hours:.0f}h − "
+                f"월요일 스타트업 {cal.monday_startup_hours:.0f}h = {week_up_h:.0f}h/주`\n\n"
+                f"`{a.days}일 ≈ {a.days/7:.1f}주 → 합계 {a.uptime_min/60:,.0f}h` "
+                f"(마지막 주가 잘리면 그만큼만 계산)"
+            )
+            st.markdown(
+                f"참고: 실효 가동률 {cal.availability:.1%}는 여기가 아니라 "
+                "각 작업 시간을 늘리는 쪽(시간 ÷ 가동률)에 반영됩니다."
+            )
+
+    with k3:
+        st.metric("기말 재공(WIP)", f"{a.wip_end:,} 로트", delta=f"{a.wip_end - a.wip_start:+,}")
+        with st.popover("🧮 근거", use_container_width=True):
+            st.markdown(
+                "**무엇인가요?** 시뮬레이션이 끝난 시점에 공장 안에 남아 있던(아직 완성 전인) 로트 수입니다."
+            )
+            st.markdown(
+                f"**어떻게 계산했나요?**\n\n"
+                f"`기말 재공 {a.wip_end:,}개 − 기초 재공 {a.wip_start:,}개 = "
+                f"{a.wip_end - a.wip_start:+,}개 변화`"
+            )
+            if a.wip_growing:
+                st.markdown(
+                    "⚠️ 재공이 계속 늘고 있습니다 — 들어오는 물량이 설비 능력보다 많아 "
+                    "재고가 쌓이는 상태라는 뜻입니다."
+                )
+            else:
+                st.markdown("재공이 안정 범위라 투입과 산출이 대체로 균형입니다.")
+
+    with k4:
+        over_rows = [r for r in a.capacity if r.load > 1.0]
+        st.metric(
+            "능력 부족 설비",
+            f"{len(over_rows)} 개",
+            delta="문제" if over_rows else "여유",
+            delta_color="inverse",
+        )
+        with st.popover("🧮 근거", use_container_width=True):
+            st.markdown(
+                "**무엇인가요?** 월 입고량을 다 처리하기에 시간이 모자라는 설비 수입니다. "
+                "부하 = 필요한 시간 ÷ 쓸 수 있는 시간이고, **100%를 넘으면 물리적으로 불가능**합니다."
+            )
+            if over_rows:
+                st.markdown("**어떤 설비가, 얼마나 넘나요?**")
+                for r in over_rows[:6]:
+                    st.markdown(
+                        f"- **{r.label}** ({r.count}대): "
+                        f"`요구 {r.demand_min/60:,.0f}h ÷ 가용 {r.capacity_min/60:,.0f}h "
+                        f"= {r.load:.0%}`"
+                    )
+                if len(over_rows) > 6:
+                    st.caption(f"…외 {len(over_rows) - 6}개 (아래 능력 표 참조)")
+            else:
+                worst = a.capacity[0] if a.capacity else None
+                if worst:
+                    st.markdown(
+                        f"모든 설비가 100% 이하입니다. 가장 빠듯한 곳은 **{worst.label}**: "
+                        f"`요구 {worst.demand_min/60:,.0f}h ÷ 가용 {worst.capacity_min/60:,.0f}h "
+                        f"= {worst.load:.0%}`"
+                    )
+
+
 def render_page(cfg: CmsConfig | None = None, run: bool = False) -> None:
     st.header("🏭 CMS 전선공장 시뮬레이션")
     st.caption(
