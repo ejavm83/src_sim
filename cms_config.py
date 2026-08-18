@@ -56,9 +56,9 @@ def default_equipment() -> dict[str, Equipment]:
         Equipment("rewind1250", "재권취기(1250Φ)", 2, 30.0, ("CU19",)),
         # 실리콘 HV 전용 — 편조·테이핑·시스 대수 미확인(질문 #1)
         Equipment("sil_ext", "실리콘 압출기", 2, 60.0, ("SIL",)),
-        Equipment("sil_braider", "편조기(실리콘)", 10, 60.0, ("SIL",), tbd_count=True),
-        Equipment("sil_taping", "테이핑기(실리콘)", 2, 30.0, ("SIL",), tbd_count=True),
-        Equipment("sil_sheath", "시스압출기(실리콘)", 2, 60.0, ("SIL",), tbd_count=True),
+        # 실리콘 편조(S4·S5)·테이핑(S6·S7)은 Cu44의 E18·E19와 위치가 달라 별도 설비 (SOP 2.6)
+        Equipment("sil_braider", "편조기(실리콘 S4·S5)", 10, 60.0, ("SIL",), tbd_count=True),
+        Equipment("sil_taping", "테이핑기(실리콘 S6·S7)", 2, 30.0, ("SIL",), tbd_count=True),
         # 검사 — 시간·인원 미확인(SOP 5.x '◆6.2 검사' TBD)
         Equipment("inspect", "검사(육안)", 4, 0.0, ("CU44", "CU19", "AL16", "SIL"), tbd_count=True),
     ]
@@ -154,7 +154,8 @@ def _sil_steps() -> list[Step]:
         Step("3.2", "실리콘 압출", "sil_ext", 50.0, split=5, out_len_m=1_000),
         Step("4.1", "편조(차폐)", "sil_braider", 666.7, out_len_m=1_000),
         Step("4.2", "테이핑", "sil_taping", 50.0, out_len_m=1_000),
-        Step("5.1", "시스 압출", "sil_sheath", 66.7, out_len_m=1_000),
+        # 시스도 절연과 같은 S2·S3 실리콘 압출기를 다시 쓴다 (SOP 2.6·질문 #18)
+        Step("5.1", "시스 압출", "sil_ext", 66.7, out_len_m=1_000),
         Step("6.2", "검사", "inspect", 10.0),
     ]
 

@@ -131,7 +131,7 @@
     },
     {
       "key": "braider",
-      "label": "편조기(Cu)",
+      "label": "편조기(Cu) — E18",
       "count": 21,
       "setup_min": 60.0,
       "shared_by": [
@@ -142,7 +142,7 @@
     },
     {
       "key": "taping",
-      "label": "테이핑기",
+      "label": "테이핑기 — E19",
       "count": 4,
       "setup_min": 30.0,
       "shared_by": [
@@ -153,7 +153,7 @@
     },
     {
       "key": "sheath_ext",
-      "label": "시스압출기",
+      "label": "시스압출기 — E21·E22",
       "count": 2,
       "setup_min": 60.0,
       "shared_by": [
@@ -195,7 +195,7 @@
     },
     {
       "key": "sil_braider",
-      "label": "편조기(실리콘)",
+      "label": "편조기(실리콘 S4·S5)",
       "count": 10,
       "setup_min": 60.0,
       "shared_by": [
@@ -205,19 +205,9 @@
     },
     {
       "key": "sil_taping",
-      "label": "테이핑기(실리콘)",
+      "label": "테이핑기(실리콘 S6·S7)",
       "count": 2,
       "setup_min": 30.0,
-      "shared_by": [
-        "SIL"
-      ],
-      "tbd_count": true
-    },
-    {
-      "key": "sil_sheath",
-      "label": "시스압출기(실리콘)",
-      "count": 2,
-      "setup_min": 60.0,
       "shared_by": [
         "SIL"
       ],
@@ -477,7 +467,7 @@
         {
           "seq": "5.1",
           "label": "쉬스 압출(최외곽 자켓)",
-          "equip": "sil_sheath",
+          "equip": "sil_ext",
           "minutes": 66.66666666666667,
           "out_len_m": 1000.0
         },

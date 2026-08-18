@@ -33,11 +33,21 @@ _EQUIP_BY_SEQ: dict[str, str | dict[str, str]] = {
     "3.3": "irradiator",
     "4.1": {"SIL": "sil_braider", "*": "braider"},
     "4.2": {"SIL": "sil_taping", "*": "taping"},
-    "5.1": {"SIL": "sil_sheath", "*": "sheath_ext"},
+    # 실리콘 시스는 절연 압출과 위치가 같아(S2·S3) 같은 압출기를 다시 쓴다 — SOP 2.6·질문 #18
+    "5.1": {"SIL": "sil_ext", "*": "sheath_ext"},
     "5.2": "irradiator",
     "6.1": {"CU19": "rewind1250", "*": "rewind1050"},
     "6.2": "inspect",
 }
+
+def _normalize_equip_label(label: str) -> str:
+    """설비 표기에서 위치 코드 꼬리를 떼어 낸다.
+
+    SOP v0.3(md_4)부터 「편조기(Cu) — E18」처럼 위치 코드가 붙었다.
+    앞부분의 설비 이름만 남겨 조회한다.
+    """
+    return re.split(r"\s*[—–]\s*", label)[0].strip().lower()
+
 
 # 설비 마스터의 표기 → 설비 키
 _EQUIP_BY_LABEL: dict[str, str] = {
@@ -217,7 +227,7 @@ def parse_equipment_master(md: str) -> tuple[dict[str, dict[str, Any]], list[str
             if len(r) < 4:
                 continue
             label, count_s, shared_s, setup_s = r[0], r[1], r[2], r[3]
-            key = _EQUIP_BY_LABEL.get(label.lower().strip())
+            key = _EQUIP_BY_LABEL.get(_normalize_equip_label(label))
             if key is None:
                 unresolved.append(label)
                 continue

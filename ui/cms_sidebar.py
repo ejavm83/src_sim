@@ -163,8 +163,10 @@ def render_cms_sidebar(base: CmsConfig | None = None) -> tuple[CmsConfig, bool]:
                                     count=_count(cfg, "sil_braider", "편조기 대수 (실리콘)", 60))
         eq["sil_taping"] = replace(eq["sil_taping"],
                                    count=_count(cfg, "sil_taping", "테이핑기 대수 (실리콘)", 20))
-        eq["sil_sheath"] = replace(eq["sil_sheath"],
-                                   count=_count(cfg, "sil_sheath", "시스압출기 대수 (실리콘)", 20))
+        st.caption(
+            "시스 압출은 별도 설비가 아니라 **절연과 같은 실리콘 압출기**(S2·S3)를 "
+            "다시 씁니다 — SOP 2.6 위치 코드 해석(질문 #18)."
+        )
 
     new_cfg = replace(
         cfg,
