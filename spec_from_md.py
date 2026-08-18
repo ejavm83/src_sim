@@ -37,7 +37,8 @@ _EQUIP_BY_SEQ: dict[str, str | dict[str, str]] = {
     "5.1": {"SIL": "sil_ext", "*": "sheath_ext"},
     "5.2": "irradiator",
     "6.1": {"CU19": "rewind1250", "*": "rewind1050"},
-    "6.2": "inspect",
+    # 검사도 위치가 갈린다 — E24·E25(Cu·AL) vs S9(실리콘), SOP 2.6
+    "6.2": {"SIL": "inspect_sil", "*": "inspect"},
 }
 
 def _normalize_equip_label(label: str) -> str:
@@ -323,6 +324,7 @@ def parse_routes(md: str) -> tuple[dict[str, dict[str, Any]], list[str]]:
                 "seq": seq,
                 "label": label,
                 "equip": equip,
+                "loc": r[1].strip(),
                 "minutes": minutes if minutes else 10.0,
                 **({"split": split} if split != 1 else {}),
                 **({"out_len_m": out_len} if out_len else {}),

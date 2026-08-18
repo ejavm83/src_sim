@@ -148,8 +148,9 @@ def render_cms_sidebar(base: CmsConfig | None = None) -> tuple[CmsConfig, bool]:
         eq["rewind1250"] = replace(eq["rewind1250"],
                                    count=_count(cfg, "rewind1250", "재권취기 대수 (1250Φ)", 20,
                                                 "Cu19 전용."))
-        eq["inspect"] = replace(eq["inspect"], count=_count(cfg, "inspect", "검사 작업조 수", 30,
-                                                            "SOP는 검사 시간을 TBD로 남겼습니다."))
+        eq["inspect"] = replace(eq["inspect"],
+                                count=_count(cfg, "inspect", "검사 작업조 수 (E24·E25)", 30,
+                                             "Cu44·Cu19·AL16 공용. SOP는 검사 시간을 TBD로 남겼습니다."))
         cu44_pal = int(st.slider("파렛트 조건 — Cu44 (보빈/파렛트)", 1, 60,
                                  pal.cu44_bobbins_per_pallet, 1, help="SOP 7.6: 18보빈"))
         cu19_pal = int(st.slider("파렛트 조건 — Cu19 (다발/파렛트)", 1, 120,
@@ -160,9 +161,12 @@ def render_cms_sidebar(base: CmsConfig | None = None) -> tuple[CmsConfig, bool]:
         eq["sil_ext"] = replace(eq["sil_ext"], count=_count(cfg, "sil_ext", "실리콘 압출기 대수", 12,
                                                             "좌: CU, 우: AL"))
         eq["sil_braider"] = replace(eq["sil_braider"],
-                                    count=_count(cfg, "sil_braider", "편조기 대수 (실리콘)", 60))
+                                    count=_count(cfg, "sil_braider", "편조기 대수 (실리콘 S4·S5)", 60))
         eq["sil_taping"] = replace(eq["sil_taping"],
-                                   count=_count(cfg, "sil_taping", "테이핑기 대수 (실리콘)", 20))
+                                   count=_count(cfg, "sil_taping", "테이핑기 대수 (실리콘 S6·S7)", 20))
+        eq["inspect_sil"] = replace(eq["inspect_sil"],
+                                    count=_count(cfg, "inspect_sil", "검사 작업조 수 (실리콘 S9)", 20,
+                                                 "위치가 E24·E25와 달라 Cu·AL 검사와 별도 설비입니다 (SOP 2.6)."))
         st.caption(
             "시스 압출은 별도 설비가 아니라 **절연과 같은 실리콘 압출기**(S2·S3)를 "
             "다시 씁니다 — SOP 2.6 위치 코드 해석(질문 #18)."

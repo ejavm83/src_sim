@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -62,6 +63,8 @@ def _step_to_spec(s: Step) -> dict[str, Any]:
         d["out_len_m"] = s.out_len_m
     if s.tbd_time:
         d["tbd_time"] = True
+    if s.loc:
+        d["loc"] = s.loc
     return d
 
 
@@ -155,6 +158,7 @@ def _step_from_spec(d: dict[str, Any]) -> Step:
         split=int(d.get("split", 1)),
         out_len_m=float(d.get("out_len_m", 0.0)),
         tbd_time=bool(d.get("tbd_time", False)),
+        loc=str(d.get("loc", "")),
     )
 
 
@@ -295,4 +299,52 @@ def validate_spec(spec: dict[str, Any]) -> list[str]:
     if not 0 < av <= 1:
         problems.append(f"실효 가동률이 0~1 범위를 벗어났습니다: {av}")
 
+    problems.extend(location_conflicts(spec))
+    return problems
+
+
+def _loc_codes(text: str) -> set[str]:
+    """'E24→E25' · 'A6·A7' → {'E24','E25'} · {'A6','A7'}."""
+    return set(re.findall(r"[A-Z]+\d+", text.upper()))
+
+
+def location_conflicts(spec: dict[str, Any]) -> list[str]:
+    """설비 하나가 서로 **겹치지 않는 위치**에 걸쳐 있으면 알려 준다.
+
+    SOP 2.6은 "시뮬레이션의 자원 풀은 지도의 역(위치 코드) 하나하나에 대응한다"고
+    정한다. 위치가 완전히 다른 두 공정을 한 자원으로 묶으면 있지도 않은 경합을
+    만들어 병목을 왜곡한다 — 그 실수를 잡는 검사다.
+
+    같은 설비를 다시 쓰는 경우(실리콘 절연 S2 / 시스 S2·S3)는 위치가 겹치므로
+    문제로 보지 않는다.
+    """
+    seen: dict[str, list[tuple[str, set[str]]]] = {}
+    for line_key, route in spec.get("routes", {}).items():
+        for step in route.get("steps", []):
+            codes = _loc_codes(str(step.get("loc", "")))
+            if not codes:
+                continue
+            seen.setdefault(str(step.get("equip")), []).append(
+                (f"{line_key} {step.get('seq', '')}", codes)
+            )
+
+    problems: list[str] = []
+    for equip, entries in sorted(seen.items()):
+        groups: list[tuple[set[str], list[str]]] = []
+        for where, codes in entries:
+            for g_codes, g_where in groups:
+                if g_codes & codes:      # 한 위치라도 겹치면 같은 설비로 본다
+                    g_codes |= codes
+                    g_where.append(where)
+                    break
+            else:
+                groups.append((set(codes), [where]))
+        if len(groups) > 1:
+            desc = " / ".join(
+                f"{'·'.join(sorted(c))}({', '.join(w)})" for c, w in groups
+            )
+            problems.append(
+                f"설비 `{equip}`가 서로 다른 위치에 걸쳐 있습니다 — {desc}. "
+                "위치가 다르면 별도 설비이므로 자원을 나눠야 합니다 (SOP 2.6)."
+            )
     return problems

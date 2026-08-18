@@ -59,8 +59,10 @@ def default_equipment() -> dict[str, Equipment]:
         # 실리콘 편조(S4·S5)·테이핑(S6·S7)은 Cu44의 E18·E19와 위치가 달라 별도 설비 (SOP 2.6)
         Equipment("sil_braider", "편조기(실리콘 S4·S5)", 10, 60.0, ("SIL",), tbd_count=True),
         Equipment("sil_taping", "테이핑기(실리콘 S6·S7)", 2, 30.0, ("SIL",), tbd_count=True),
-        # 검사 — 시간·인원 미확인(SOP 5.x '◆6.2 검사' TBD)
-        Equipment("inspect", "검사(육안)", 4, 0.0, ("CU44", "CU19", "AL16", "SIL"), tbd_count=True),
+        # 검사 — 위치가 갈린다: E24·E25(Cu44·Cu19·AL16)와 S9(실리콘)는 별도 (SOP 2.6)
+        # 시간·인원은 미확인(SOP 5.x '◆6.2 검사' TBD)
+        Equipment("inspect", "검사(육안 E24·E25)", 4, 0.0, ("CU44", "CU19", "AL16"), tbd_count=True),
+        Equipment("inspect_sil", "검사(실리콘 S9)", 2, 0.0, ("SIL",), tbd_count=True),
     ]
     return {e.key: e for e in specs}
 
@@ -83,6 +85,7 @@ class Step:
     split: int = 1
     out_len_m: float = 0.0   # 아웃풋 로트 1개의 길이(m) — 물량 집계용
     tbd_time: bool = False
+    loc: str = ""     # SOP 위치 코드(예: "E18") — 자원 풀의 근거 (SOP 2.6)
 
 
 @dataclass
@@ -156,7 +159,7 @@ def _sil_steps() -> list[Step]:
         Step("4.2", "테이핑", "sil_taping", 50.0, out_len_m=1_000),
         # 시스도 절연과 같은 S2·S3 실리콘 압출기를 다시 쓴다 (SOP 2.6·질문 #18)
         Step("5.1", "시스 압출", "sil_ext", 66.7, out_len_m=1_000),
-        Step("6.2", "검사", "inspect", 10.0),
+        Step("6.2", "검사", "inspect_sil", 10.0),
     ]
 
 
