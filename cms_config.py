@@ -28,6 +28,24 @@ class Equipment:
     setup_min: float = 0.0
     shared_by: tuple[str, ...] = ()
     tbd_count: bool = False  # 대수가 SOP 미확인(질문 #1)
+    # 개별 설비 식별자. 위치 코드에서 만든다(예: 절연압출기 -> ["E12", "E13"]).
+    # 비어 있으면 엔진이 `{key}-1..n`으로 자동 부여한다.
+    machines: tuple[str, ...] = ()
+
+    def machine_ids(self) -> list[str]:
+        """대수만큼의 개별 설비 식별자."""
+        n = max(1, self.count)
+        if len(self.machines) == n:
+            return list(self.machines)
+        if self.machines:
+            # 위치는 알지만 대수가 더 많다 -> 위치 안에서 번호를 매긴다 (예: E18-1..E18-21)
+            base = list(self.machines)
+            out = []
+            for i in range(n):
+                loc = base[i % len(base)]
+                out.append(loc if n == len(base) else f"{loc}-{i // len(base) + 1}")
+            return out
+        return [f"{self.key}-{i + 1}" for i in range(n)]
 
 
 def default_equipment() -> dict[str, Equipment]:

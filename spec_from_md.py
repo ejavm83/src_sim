@@ -274,6 +274,7 @@ def parse_routes(md: str) -> tuple[dict[str, dict[str, Any]], list[str]]:
     routes: dict[str, dict[str, Any]] = {}
     warnings: list[str] = []
     conversions = parse_lot_conversions(md)
+    flow_locs: dict[str, list[str]] = {}   # flow가 담당하는 앞단 설비의 위치
 
     for heading, header, rows in iter_tables(md):
         if header[:3] != ["No", "위치", "공정 순번·단계"]:
@@ -290,7 +291,13 @@ def parse_routes(md: str) -> tuple[dict[str, dict[str, Any]], list[str]]:
                 continue  # 물류·창고 행은 가공 단계가 아니다
             seq, label = _seq_and_label(r[2])
             if seq in FLOW_HANDLED_SEQ.get(line, ()):
-                continue  # 앞단 공정은 flow 로직이 담당
+                # 라우팅에는 넣지 않지만(이중 계산 방지) 위치는 설비 식별에 쓴다
+                eq_key = _equip_for(seq, line, label)
+                if eq_key:
+                    flow_locs.setdefault(eq_key, []).extend(
+                        c for c in re.findall(r"[A-Z]+\d+", r[1].upper())
+                    )
+                continue
             equip = _equip_for(seq, line, label)
             if equip is None:
                 warnings.append(f"{line} 「{r[2][:30]}」: 순번 {seq or '?'}에 설비 매핑 없음")
@@ -360,7 +367,7 @@ def parse_routes(md: str) -> tuple[dict[str, dict[str, Any]], list[str]]:
             "파생했습니다(SOP 5.1 산문 근거, 질문 #5)."
         )
 
-    return routes, warnings
+    return routes, warnings, flow_locs
 
 
 def _rescale_plain_cu44(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -376,6 +383,48 @@ def _rescale_plain_cu44(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return steps
 
 
+def assign_machine_ids(
+    equipment: dict[str, dict[str, Any]],
+    routes: dict[str, dict[str, Any]],
+    extra_locs: dict[str, list[str]] | None = None,
+) -> None:
+    """라우팅 표의 위치 코드로 개별 설비 식별자를 부여한다 (SOP 2.6).
+
+    같은 유형 설비라도 현장에서는 위치·번호로 구분되는 별개의 기계다.
+    위치 코드가 대수와 같으면 그대로 쓰고(절연압출기 2대 -> E12·E13),
+    대수가 더 많으면 위치 안에서 번호를 매긴다(편조기 21대 -> E18-1..E18-21).
+    """
+    locs: dict[str, list[str]] = {}
+    for key, codes in (extra_locs or {}).items():
+        bucket = locs.setdefault(key, [])
+        for c in codes:
+            if c not in bucket:
+                bucket.append(c)
+    for route in routes.values():
+        for step in route.get("steps", []):
+            key = str(step.get("equip"))
+            for code in re.findall(r"[A-Z]+\d+", str(step.get("loc", "")).upper()):
+                bucket = locs.setdefault(key, [])
+                if code not in bucket:
+                    bucket.append(code)
+
+    for key, spec in equipment.items():
+        codes = locs.get(key, [])
+        n = max(1, int(spec.get("count", 1)))
+        if not codes:
+            spec["machines"] = []
+        elif len(codes) == n:
+            spec["machines"] = codes
+        elif n < len(codes):
+            spec["machines"] = codes[:n]
+        else:
+            out: list[str] = []
+            for i in range(n):
+                loc = codes[i % len(codes)]
+                out.append(f"{loc}-{i // len(codes) + 1}")
+            spec["machines"] = out
+
+
 def spec_from_markdown(md: str, base: dict[str, Any] | None = None) -> tuple[dict[str, Any], list[str]]:
     """MD 표에서 사양을 만든다.
 
@@ -389,7 +438,7 @@ def spec_from_markdown(md: str, base: dict[str, Any] | None = None) -> tuple[dic
     notes: list[str] = []
 
     equipment, unresolved = parse_equipment_master(md)
-    routes, warns = parse_routes(md)
+    routes, warns, flow_locs = parse_routes(md)
     notes.extend(warns)
     for label in unresolved:
         notes.append(f"설비 마스터의 「{label}」는 설비 키에 연결되지 않아 건너뛰었습니다.")
@@ -398,6 +447,7 @@ def spec_from_markdown(md: str, base: dict[str, Any] | None = None) -> tuple[dic
         # base에만 있는 설비(문서가 대수를 안 밝힌 것)는 남겨 둔다.
         merged = {e["key"]: e for e in spec.get("equipment", [])}
         merged.update(equipment)
+        assign_machine_ids(merged, routes or spec.get("routes", {}), flow_locs)
         spec["equipment"] = list(merged.values())
     else:
         notes.append("「6.1 설비 마스터」 표를 찾지 못했습니다.")

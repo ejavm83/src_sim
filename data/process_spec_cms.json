@@ -21,7 +21,10 @@
         "CU44",
         "CU19"
       ],
-      "tbd_count": false
+      "tbd_count": false,
+      "machines": [
+        "E2"
+      ]
     },
     {
       "key": "multi",
@@ -32,7 +35,10 @@
         "CU44",
         "CU19"
       ],
-      "tbd_count": false
+      "tbd_count": false,
+      "machines": [
+        "E4"
+      ]
     },
     {
       "key": "bunch19",
@@ -42,7 +48,19 @@
       "shared_by": [
         "CU19"
       ],
-      "tbd_count": false
+      "tbd_count": false,
+      "machines": [
+        "E7-1",
+        "E8-1",
+        "E7-2",
+        "E8-2",
+        "E7-3",
+        "E8-3",
+        "E7-4",
+        "E8-4",
+        "E7-5",
+        "E8-5"
+      ]
     },
     {
       "key": "strand",
@@ -53,7 +71,15 @@
         "CU44",
         "CU19"
       ],
-      "tbd_count": false
+      "tbd_count": false,
+      "machines": [
+        "E6-1",
+        "E6-2",
+        "E6-3",
+        "E6-4",
+        "E6-5",
+        "E6-6"
+      ]
     },
     {
       "key": "tubular",
@@ -63,7 +89,10 @@
       "shared_by": [
         "CU19"
       ],
-      "tbd_count": false
+      "tbd_count": false,
+      "machines": [
+        "E9"
+      ]
     },
     {
       "key": "multi_al",
@@ -73,7 +102,10 @@
       "shared_by": [
         "AL16"
       ],
-      "tbd_count": true
+      "tbd_count": true,
+      "machines": [
+        "A2"
+      ]
     },
     {
       "key": "bunch_al_dbl",
@@ -83,7 +115,10 @@
       "shared_by": [
         "AL16"
       ],
-      "tbd_count": true
+      "tbd_count": true,
+      "machines": [
+        "A4"
+      ]
     },
     {
       "key": "bunch_al_sgl",
@@ -93,7 +128,21 @@
       "shared_by": [
         "AL16"
       ],
-      "tbd_count": false
+      "tbd_count": false,
+      "machines": [
+        "A6-1",
+        "A7-1",
+        "A6-2",
+        "A7-2",
+        "A6-3",
+        "A7-3",
+        "A6-4",
+        "A7-4",
+        "A6-5",
+        "A7-5",
+        "A6-6",
+        "A7-6"
+      ]
     },
     {
       "key": "bunch_al_fin",
@@ -103,7 +152,10 @@
       "shared_by": [
         "AL16"
       ],
-      "tbd_count": true
+      "tbd_count": true,
+      "machines": [
+        "A8"
+      ]
     },
     {
       "key": "ins_ext",
@@ -115,7 +167,11 @@
         "CU19",
         "AL16"
       ],
-      "tbd_count": false
+      "tbd_count": false,
+      "machines": [
+        "E12",
+        "E13"
+      ]
     },
     {
       "key": "irradiator",
@@ -127,7 +183,10 @@
         "CU19",
         "AL16"
       ],
-      "tbd_count": false
+      "tbd_count": false,
+      "machines": [
+        "E15"
+      ]
     },
     {
       "key": "braider",
@@ -138,7 +197,30 @@
         "CU44",
         "SIL"
       ],
-      "tbd_count": false
+      "tbd_count": false,
+      "machines": [
+        "E18-1",
+        "E18-2",
+        "E18-3",
+        "E18-4",
+        "E18-5",
+        "E18-6",
+        "E18-7",
+        "E18-8",
+        "E18-9",
+        "E18-10",
+        "E18-11",
+        "E18-12",
+        "E18-13",
+        "E18-14",
+        "E18-15",
+        "E18-16",
+        "E18-17",
+        "E18-18",
+        "E18-19",
+        "E18-20",
+        "E18-21"
+      ]
     },
     {
       "key": "taping",
@@ -149,7 +231,13 @@
         "CU44",
         "SIL"
       ],
-      "tbd_count": false
+      "tbd_count": false,
+      "machines": [
+        "E19-1",
+        "E19-2",
+        "E19-3",
+        "E19-4"
+      ]
     },
     {
       "key": "sheath_ext",
@@ -160,7 +248,11 @@
         "CU44",
         "SIL"
       ],
-      "tbd_count": false
+      "tbd_count": false,
+      "machines": [
+        "E21",
+        "E22"
+      ]
     },
     {
       "key": "rewind1050",
@@ -171,7 +263,11 @@
         "CU44",
         "AL16"
       ],
-      "tbd_count": false
+      "tbd_count": false,
+      "machines": [
+        "E23-1",
+        "E23-2"
+      ]
     },
     {
       "key": "rewind1250",
@@ -181,7 +277,11 @@
       "shared_by": [
         "CU19"
       ],
-      "tbd_count": false
+      "tbd_count": false,
+      "machines": [
+        "E23-1",
+        "E23-2"
+      ]
     },
     {
       "key": "sil_ext",
@@ -191,7 +291,11 @@
       "shared_by": [
         "SIL"
       ],
-      "tbd_count": false
+      "tbd_count": false,
+      "machines": [
+        "S2",
+        "S3"
+      ]
     },
     {
       "key": "sil_braider",
@@ -201,7 +305,19 @@
       "shared_by": [
         "SIL"
       ],
-      "tbd_count": true
+      "tbd_count": true,
+      "machines": [
+        "S4-1",
+        "S5-1",
+        "S4-2",
+        "S5-2",
+        "S4-3",
+        "S5-3",
+        "S4-4",
+        "S5-4",
+        "S4-5",
+        "S5-5"
+      ]
     },
     {
       "key": "sil_taping",
@@ -211,7 +327,11 @@
       "shared_by": [
         "SIL"
       ],
-      "tbd_count": true
+      "tbd_count": true,
+      "machines": [
+        "S6",
+        "S7"
+      ]
     },
     {
       "key": "inspect",
@@ -223,7 +343,13 @@
         "CU19",
         "AL16"
       ],
-      "tbd_count": true
+      "tbd_count": true,
+      "machines": [
+        "E25-1",
+        "E24-1",
+        "E25-2",
+        "E24-2"
+      ]
     },
     {
       "key": "inspect_sil",
@@ -233,7 +359,11 @@
       "shared_by": [
         "SIL"
       ],
-      "tbd_count": true
+      "tbd_count": true,
+      "machines": [
+        "S9-1",
+        "S9-2"
+      ]
     }
   ],
   "routes": {

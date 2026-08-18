@@ -47,6 +47,7 @@ def _equipment_to_spec(eq: Equipment) -> dict[str, Any]:
         "setup_min": eq.setup_min,
         "shared_by": list(eq.shared_by),
         "tbd_count": eq.tbd_count,
+        "machines": list(eq.machines),
     }
 
 
@@ -172,6 +173,7 @@ def spec_to_config(spec: dict[str, Any]) -> CmsConfig:
             setup_min=float(e.get("setup_min", 0.0)),
             shared_by=tuple(e.get("shared_by", ())),
             tbd_count=bool(e.get("tbd_count", False)),
+            machines=tuple(e.get("machines", ())),
         )
         for e in spec.get("equipment", [])
     }

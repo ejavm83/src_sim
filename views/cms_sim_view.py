@@ -162,6 +162,41 @@ def _render_bottlenecks(a: CmsAnalysis) -> None:
     )
 
 
+def _render_machines(a: CmsAnalysis) -> None:
+    st.markdown("#### 🔧 개별 설비별 가동률과 공유 관계")
+    st.caption(
+        "같은 유형이라도 현장에서는 **위치·번호로 구분되는 개별 기계**입니다(SOP 2.6 — "
+        "자원 풀은 지도의 역 하나하나에 대응). 아래는 기계 한 대 단위의 결과이고, "
+        "**사용 라인**이 둘 이상이면 그 기계에서 라인 간 경합이 일어납니다."
+    )
+    rows = [
+        {
+            "설비 ID": r.machine_id,
+            "유형": r.equip_label,
+            "가동률": r.utilization,
+            "처리 로트": r.jobs,
+            "사용 라인 수": len(r.lines),
+            "사용 라인": " · ".join(LINE_LABELS.get(x, x) for x in r.lines) or "-",
+        }
+        for r in a.machines
+    ]
+    only_shared = st.checkbox(
+        "여러 라인이 함께 쓰는 설비만 보기", value=False, key="cms_only_shared"
+    )
+    if only_shared:
+        rows = [r for r in rows if r["사용 라인 수"] > 1]
+    st.dataframe(
+        pd.DataFrame(rows),
+        hide_index=True,
+        use_container_width=True,
+        column_config={
+            "가동률": st.column_config.ProgressColumn(
+                "가동률", format="%.0f%%", min_value=0.0, max_value=1.0
+            ),
+        },
+    )
+
+
 def _render_output(a: CmsAnalysis) -> None:
     st.markdown("#### 📦 라인별 생산량과 리드타임")
     rows = []
@@ -229,12 +264,7 @@ def render_page(cfg: CmsConfig | None = None, run: bool = False) -> None:
     a: CmsAnalysis = run_state["analysis"]
     st.success(f"✅ {a.days}일 시뮬레이션 완료 — 실측 {run_state['elapsed']:.2f}초")
 
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("총 생산량", f"{a.total_m/1_000_000:.2f}M m")
-    k2.metric("가동 가능 시간", f"{a.uptime_min/60:,.0f} h", help="주말 정지·월요일 스타트업 제외")
-    k3.metric("기말 재공(WIP)", f"{a.wip_end:,} 로트", delta=f"{a.wip_end - a.wip_start:+,}")
-    over = sum(1 for r in a.capacity if r.load > 1.0)
-    k4.metric("능력 부족 설비", f"{over} 개", delta="문제" if over else "여유", delta_color="inverse")
+    _render_kpis(a, cfg)
 
     if a.findings:
         st.markdown("#### 🔎 진단")
@@ -245,6 +275,8 @@ def render_page(cfg: CmsConfig | None = None, run: bool = False) -> None:
     _render_capacity(a)
     st.divider()
     _render_bottlenecks(a)
+    st.divider()
+    _render_machines(a)
     st.divider()
     _render_output(a)
 

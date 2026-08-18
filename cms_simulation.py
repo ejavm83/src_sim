@@ -86,9 +86,10 @@ class Pool:
 
     def __init__(self, env: simpy.Environment, spec: Equipment) -> None:
         self.spec = spec
-        self.store = simpy.Store(env, capacity=max(1, spec.count))
-        for i in range(max(1, spec.count)):
-            self.store.items.append({"unit": i, "group": None})
+        ids = spec.machine_ids()
+        self.store = simpy.Store(env, capacity=len(ids))
+        for i, mid in enumerate(ids):
+            self.store.items.append({"unit": i, "id": mid, "group": None})
 
 
 # ── 지표 ──────────────────────────────────────────────────────────────────
@@ -103,6 +104,12 @@ class CmsMetrics:
     equip_count: dict[str, int] = field(default_factory=dict)
     equip_tbd: dict[str, bool] = field(default_factory=dict)
     busy_min: dict[str, float] = field(default_factory=lambda: defaultdict(float))
+    # 개별 설비(위치·번호) 단위 — SOP 2.6 자원 풀 정의
+    machine_ids: dict[str, list[str]] = field(default_factory=dict)
+    machine_busy: dict[str, float] = field(default_factory=lambda: defaultdict(float))
+    machine_setup: dict[str, float] = field(default_factory=lambda: defaultdict(float))
+    machine_lines: dict[str, set] = field(default_factory=lambda: defaultdict(set))
+    machine_jobs: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     setup_min: dict[str, float] = field(default_factory=lambda: defaultdict(float))
     wait_min: dict[str, float] = field(default_factory=lambda: defaultdict(float))
     wait_n: dict[str, int] = field(default_factory=lambda: defaultdict(int))
@@ -173,6 +180,7 @@ class Plant:
             m.equip_label[k] = spec.label
             m.equip_count[k] = max(1, spec.count)
             m.equip_tbd[k] = spec.tbd_count
+            m.machine_ids[k] = spec.machine_ids()
 
         # Cu19 튜블러 병합 대기열 (SOP 2.5)
         self.cu19_bunched: simpy.Store = simpy.Store(env)
@@ -192,16 +200,22 @@ def run_on(plant: Plant, equip: str, group: str, minutes: float, step_label: str
     unit = yield pool.store.get()
     m.dequeue(equip, env.now - t0)
 
+    mid = (equip, unit["id"])
     if unit["group"] is not None and unit["group"] != group:
         setup = pool.spec.setup_min
         if setup > 0:
             yield from work(env, plant.cal, setup)
-            m.setup_min[equip] += setup / plant.cal.availability
+            eff_setup = setup / plant.cal.availability
+            m.setup_min[equip] += eff_setup
+            m.machine_setup[mid] += eff_setup
     unit["group"] = group
 
     yield from work(env, plant.cal, minutes)
     eff = minutes / plant.cal.availability
     m.busy_min[equip] += eff
+    m.machine_busy[mid] += eff
+    m.machine_lines[mid].add(group)
+    m.machine_jobs[mid] += 1
     if step_label:
         m.step_busy[(equip, step_label)] += eff
 
