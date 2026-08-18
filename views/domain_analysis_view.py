@@ -47,8 +47,9 @@ def _analysis_schema() -> dict[str, Any]:
                         "value": {"type": "string"},
                         "unit": {"type": "string"},
                         "status": {"type": "string"},
+                        "basis": {"type": "string"},
                     },
-                    "required": ["name", "value"],
+                    "required": ["name", "value", "basis"],
                     "additionalProperties": False,
                 },
             },
@@ -111,6 +112,10 @@ def _system_prompt(domain_json: dict, md_text: str) -> str:
         "- domain: 도메인명 한 줄\n"
         "- kpis: 주요 성과지표 5~10개 (처리량, 리드타임, 효율, 불량률 등)\n"
         "  status는 good/warning/bad 중 하나\n"
+        "  basis는 그 값을 어떻게 구했는지 — 반드시 원본 문서의 실제 수치를 대입한 "
+        "산술 수식(예: '13대 × 19.8t = 257.4t/월')과 출처(문서의 어느 표·문장인지)를 "
+        "일반인도 이해할 수 있는 쉬운 한국어 1~3문장으로. 추정이면 '추정'이라고 명시\n"
+        "  value에는 숫자만, unit에는 단위만 — value에 단위를 중복해 넣지 마세요\n"
         "- process_flow: 공정 단계별 소요시간·처리량·가동률 추정\n"
         "- bottlenecks: 병목 단계, 이슈, 영향도 (severity: high/medium/low)\n"
         "- recommendations: 개선 제안 (priority: high/medium/low)\n"
@@ -183,6 +188,7 @@ def render_page() -> None:
     kpis = result.get("kpis") or []
     if kpis:
         st.markdown("#### 📊 주요 KPI")
+        st.caption("각 카드 아래 **🧮 근거**를 누르면 그 값을 어떻게 구했는지 나옵니다.")
         n_cols = min(len(kpis), 4)
         cols = st.columns(n_cols)
         for i, kpi in enumerate(kpis[:8]):
@@ -190,11 +196,21 @@ def render_page() -> None:
                 status_icon = {"good": "🟢", "warning": "🟡", "bad": "🔴"}.get(
                     str(kpi.get("status", "")).lower(), "🔵"
                 )
-                unit = kpi.get("unit", "")
-                st.metric(
-                    label=f"{status_icon} {kpi.get('name', '')}",
-                    value=f"{kpi.get('value', '-')}{' ' + unit if unit else ''}",
-                )
+                value = str(kpi.get("value", "-")).strip()
+                unit = str(kpi.get("unit", "")).strip()
+                # LLM이 value에 단위까지 넣었으면 중복 표기하지 않는다 (예: "80t/월" + "t")
+                shown = value if not unit or unit in value else f"{value} {unit}"
+                st.metric(label=f"{status_icon} {kpi.get('name', '')}", value=shown)
+                basis = str(kpi.get("basis", "")).strip()
+                with st.popover("🧮 근거", use_container_width=True):
+                    st.markdown(f"**{kpi.get('name', '')} = {shown}**")
+                    if basis:
+                        st.markdown(basis)
+                    else:
+                        st.markdown(
+                            "이 결과는 근거 필드가 없던 이전 버전에서 분석된 것입니다. "
+                            "**🚀 분석 실행**을 다시 누르면 산출 수식과 출처가 함께 나옵니다."
+                        )
 
     # ── 공정 흐름 ──
     flow = result.get("process_flow") or []
