@@ -154,6 +154,10 @@ class CmsMetrics:
     _queue: dict[str, int] = field(default_factory=lambda: defaultdict(int), repr=False)
 
     step_busy: dict[tuple[str, str], float] = field(default_factory=lambda: defaultdict(float))
+    # 라인별 경합 추적 — '누가 어느 설비 앞에서 얼마나 밀렸나'를 병목 분석에 쓴다
+    wait_by_line: dict[tuple[str, str], float] = field(default_factory=lambda: defaultdict(float))
+    waitn_by_line: dict[tuple[str, str], int] = field(default_factory=lambda: defaultdict(int))
+    busy_by_line: dict[tuple[str, str], float] = field(default_factory=lambda: defaultdict(float))
 
     finished_lots: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     finished_m: dict[str, float] = field(default_factory=lambda: defaultdict(float))
@@ -178,10 +182,13 @@ class CmsMetrics:
         self._queue[key] += 1
         self.max_queue[key] = max(self.max_queue[key], self._queue[key])
 
-    def dequeue(self, key: str, waited: float) -> None:
+    def dequeue(self, key: str, waited: float, line: str = "") -> None:
         self._queue[key] -= 1
         self.wait_min[key] += waited
         self.wait_n[key] += 1
+        if line:
+            self.wait_by_line[(key, line)] += waited
+            self.waitn_by_line[(key, line)] += 1
 
     def wip(self, t: float, delta: int) -> None:
         self._wip += delta
@@ -245,7 +252,7 @@ def run_on(plant: Plant, equip: str, group: str, minutes: float, step_label: str
     m.enqueue(equip)
     with pool.res.request(priority=pool.priority(group)) as req:
         yield req
-        m.dequeue(equip, env.now - t0)
+        m.dequeue(equip, env.now - t0, group)
 
         unit = pool.take(group)
         mid = (equip, unit["id"])
@@ -267,6 +274,7 @@ def run_on(plant: Plant, equip: str, group: str, minutes: float, step_label: str
             m.machine_lines[mid].add(group)
             m.machine_jobs[mid] += 1
             pool.served_min[group] += eff
+            m.busy_by_line[(equip, group)] += eff
             if step_label:
                 m.step_busy[(equip, step_label)] += eff
         finally:

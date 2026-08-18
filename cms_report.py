@@ -260,3 +260,255 @@ def shared_machine_findings(rows: list[MachineRow], top: int = 3) -> list[str]:
                 "공유 자체가 병목을 만들고 있지는 않습니다."
             )
     return out
+
+
+# ── 시뮬레이션 기반 병목 진단 ─────────────────────────────────────────────
+# 문서를 읽고 "가장 느린 공정이 병목"이라고 말하는 것은 시뮬레이션이 필요 없다.
+# 여기서는 **실제로 돌려 본 결과**에서만 알 수 있는 것을 뽑는다:
+#   · 능력이 모자라 물리적으로 못 돌리는 설비 (요구시간 vs 가용시간)
+#   · 여러 라인이 한 설비를 두고 다투며 생긴 대기 (누가 누구를 밀어냈는가)
+#   · 그 경합 때문에 계획을 못 채운 라인 (굶은 라인)
+#   · 재공이 쌓이는지 (투입이 능력을 넘었는가)
+
+
+@dataclass
+class BottleneckRow:
+    """설비 1종에 대한 병목 진단 — 근거 수치를 모두 들고 다닌다."""
+
+    rank: int
+    key: str
+    label: str
+    count: int
+    kind: str                 # 능력부족 / 경합 / 여유
+    load: float               # 정적 부하 = 월 요구시간 ÷ 가용시간
+    utilization: float        # 동적 가동률 = (가공+교체) ÷ 능력
+    demand_h: float
+    capacity_h: float
+    avg_wait_h: float
+    max_queue: int
+    jobs: int
+    setup_share: float        # 가동시간 중 교체가 차지한 비중
+    lines: tuple[str, ...]    # 이 설비를 쓴 라인
+    wait_by_line: tuple[tuple[str, float], ...]   # (라인, 총 대기시간 h) 내림차순
+    add_needed: int           # 부하를 100% 이하로 낮추는 데 필요한 증설 대수
+    load_after: float
+    tbd_count: bool
+
+    @property
+    def shared(self) -> bool:
+        return len(self.lines) > 1
+
+
+@dataclass
+class LineResult:
+    """라인 1개의 계획 대비 실적 — 경합에 밀려 굶었는지 본다."""
+
+    key: str
+    label: str
+    plan_m: float
+    actual_m: float
+    rate: float
+    lead_h: float
+    wait_h: float             # 이 라인이 설비 앞에서 기다린 총 시간
+    process_h: float          # 실제 가공에 쓴 총 시간
+    blocked_at: tuple[tuple[str, float], ...]   # (설비 라벨, 대기 h) 상위
+
+    @property
+    def wait_share(self) -> float:
+        total = self.wait_h + self.process_h
+        return self.wait_h / total if total else 0.0
+
+
+@dataclass
+class BottleneckReport:
+    rows: list[BottleneckRow]
+    lines: list[LineResult]
+    wip_start: int
+    wip_end: int
+    days: int
+
+    @property
+    def over(self) -> list[BottleneckRow]:
+        return [r for r in self.rows if r.load > 1.0]
+
+    @property
+    def starved(self) -> list[LineResult]:
+        """계획의 절반도 못 채운 라인 — 대개 공유 설비 경합의 피해자다."""
+        return [ln for ln in self.lines if ln.plan_m > 0 and ln.rate < 0.5]
+
+
+def _plan_output_m(cfg: CmsConfig) -> dict[str, float]:
+    """라인별 월 계획 산출량(m) — 라우팅의 분할을 따라 끝까지 걸어 계산한다."""
+    out: dict[str, float] = {}
+    lines = cfg.lines()
+    for key, lots in line_inputs_per_month(cfg).items():
+        line = lines.get(key)
+        if line is None:
+            continue
+        last_len = 0.0
+        for step in line.steps:
+            lots *= step.split
+            if step.out_len_m:
+                last_len = step.out_len_m
+        out[key] = lots * last_len
+    return out
+
+
+def bottleneck_report(m: CmsMetrics, cfg: CmsConfig, a: CmsAnalysis) -> BottleneckReport:
+    """시뮬레이션 결과에서 병목을 근거와 함께 뽑아낸다."""
+    util = m.utilization()
+    cap_by_key = {r.key: r for r in a.capacity}
+    month_scale = 30.0 / max(1, cfg.sim_days)
+
+    rows: list[BottleneckRow] = []
+    for key, count in m.equip_count.items():
+        cap_row = cap_by_key.get(key)
+        demand_h = (cap_row.demand_min / 60.0) if cap_row else 0.0
+        capacity_h = (cap_row.capacity_min / 60.0) if cap_row else 0.0
+        load = cap_row.load if cap_row else 0.0
+
+        lines_used = sorted(
+            {ln for (k, ln) in m.busy_by_line if k == key and m.busy_by_line[(k, ln)] > 0}
+        )
+        waits = sorted(
+            ((ln, m.wait_by_line[(k, ln)] / 60.0) for (k, ln) in m.wait_by_line if k == key),
+            key=lambda x: -x[1],
+        )
+        busy = m.busy_min[key] + m.setup_min[key]
+        setup_share = (m.setup_min[key] / busy) if busy else 0.0
+
+        # 부하를 100% 이하로 낮추려면 몇 대가 더 필요한가 (요구시간은 그대로)
+        add = 0
+        load_after = load
+        if load > 1.0 and count > 0:
+            import math
+
+            need = math.ceil(load * count - 1e-9)
+            add = max(0, need - count)
+            load_after = load * count / max(1, count + add)
+
+        if load > 1.0:
+            kind = "능력부족"
+        elif len(lines_used) > 1 and (m.wait_min[key] / max(1, m.wait_n[key])) > 60:
+            kind = "경합"
+        else:
+            kind = "여유"
+
+        rows.append(
+            BottleneckRow(
+                rank=0,
+                key=key,
+                label=m.equip_label.get(key, key),
+                count=count,
+                kind=kind,
+                load=load,
+                utilization=util.get(key, 0.0),
+                demand_h=demand_h,
+                capacity_h=capacity_h,
+                avg_wait_h=(m.wait_min[key] / max(1, m.wait_n[key])) / 60.0,
+                max_queue=m.max_queue[key],
+                jobs=m.wait_n[key],
+                setup_share=setup_share,
+                lines=tuple(lines_used),
+                wait_by_line=tuple(waits[:5]),
+                add_needed=add,
+                load_after=load_after,
+                tbd_count=m.equip_tbd.get(key, False),
+            )
+        )
+
+    # 능력 부족이 먼저, 그다음 총 대기시간이 큰 순서 — '얼마나 막았나'가 기준
+    rows.sort(key=lambda r: (-(r.load > 1.0), -r.load, -m.wait_min[r.key]))
+    for i, r in enumerate(rows, start=1):
+        r.rank = i
+
+    plan_m = _plan_output_m(cfg)
+    line_rows: list[LineResult] = []
+    for key, label in LINE_LABELS.items():
+        plan = plan_m.get(key, 0.0) / month_scale   # 시뮬 기간에 맞춘 계획
+        actual = m.finished_m.get(key, 0.0)
+        if plan <= 0 and actual <= 0:
+            continue
+        wait_h = sum(v for (k, ln), v in m.wait_by_line.items() if ln == key) / 60.0
+        proc_h = sum(v for (k, ln), v in m.busy_by_line.items() if ln == key) / 60.0
+        blocked = sorted(
+            (
+                (m.equip_label.get(k, k), v / 60.0)
+                for (k, ln), v in m.wait_by_line.items()
+                if ln == key and v > 0
+            ),
+            key=lambda x: -x[1],
+        )[:3]
+        line_rows.append(
+            LineResult(
+                key=key,
+                label=label,
+                plan_m=plan,
+                actual_m=actual,
+                rate=(actual / plan) if plan else 0.0,
+                lead_h=a.lead_hours.get(key, 0.0),
+                wait_h=wait_h,
+                process_h=proc_h,
+                blocked_at=tuple(blocked),
+            )
+        )
+
+    return BottleneckReport(
+        rows=rows,
+        lines=line_rows,
+        wip_start=a.wip_start,
+        wip_end=a.wip_end,
+        days=a.days,
+    )
+
+
+def bottleneck_brief(r: BottleneckReport, top: int = 6) -> str:
+    """병목 리포트를 LLM에 넘길 사실 묶음으로 만든다.
+
+    여기 담긴 숫자는 전부 **실제로 30일을 돌려 본 결과**다. LLM이 문서를 읽고
+    '가장 느린 공정이 병목'이라고 추측하는 대신, 이 수치를 인용해 설명하도록
+    강제하기 위한 근거다.
+    """
+    out: list[str] = []
+    out.append(
+        f"[시뮬레이션 조건] {r.days}일 가동 · 재공(WIP) {r.wip_start} → {r.wip_end}개"
+        + (" (발산: 투입이 능력을 넘음)" if r.wip_end > r.wip_start * 1.5 + 10 else " (안정)")
+    )
+
+    out.append("\n[설비별 병목 진단 — 부하 = 월 요구시간 ÷ 가용시간, 100% 초과면 물리적으로 불가능]")
+    for row in r.rows[:top]:
+        if row.load <= 0 and row.jobs == 0:
+            continue
+        lines = " · ".join(
+            f"{LINE_LABELS.get(ln, ln)} {h:,.0f}h" for ln, h in row.wait_by_line[:4]
+        ) or "없음"
+        line = (
+            f"{row.rank}. {row.label} {row.count}대 [{row.kind}] — "
+            f"부하 {row.load*100:.0f}% (요구 {row.demand_h:,.0f}h ÷ 가용 {row.capacity_h:,.0f}h), "
+            f"가동률 {row.utilization*100:.0f}%, 평균대기 {row.avg_wait_h:.1f}h, "
+            f"최대 대기열 {row.max_queue}개, 처리 {row.jobs}건"
+        )
+        if row.setup_share > 0.05:
+            line += f", 가동시간의 {row.setup_share*100:.0f}%가 품종 교체"
+        line += f"\n   · 이 설비를 두고 다툰 라인 {len(row.lines)}개, 라인별 총 대기: {lines}"
+        if row.add_needed:
+            line += f"\n   · {row.add_needed}대 증설하면 부하 {row.load*100:.0f}% → {row.load_after*100:.0f}%"
+        if row.tbd_count:
+            line += "\n   · ⚠ 대수가 SOP 미확인인 가정값 (질문 #1)"
+        out.append(line)
+
+    out.append("\n[라인별 계획 대비 실적 — 경합에 밀려 못 채운 라인]")
+    for ln in r.lines:
+        blocked = " · ".join(f"{lb} {h:,.0f}h" for lb, h in ln.blocked_at) or "없음"
+        out.append(
+            f"- {ln.label}: 계획 {ln.plan_m:,.0f}m 중 {ln.actual_m:,.0f}m 생산 "
+            f"(달성률 {ln.rate*100:.0f}%), 리드타임 {ln.lead_h:,.0f}h, "
+            f"이 라인이 쓴 시간의 {ln.wait_share*100:.0f}%가 설비를 기다린 시간\n"
+            f"   · 가장 오래 막힌 곳: {blocked}"
+        )
+
+    if r.starved:
+        names = " · ".join(x.label for x in r.starved)
+        out.append(f"\n[주의] 계획의 절반도 못 채운 라인: {names}")
+
+    return "\n".join(out)

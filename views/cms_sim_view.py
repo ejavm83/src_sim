@@ -11,10 +11,13 @@ import pandas as pd
 import streamlit as st
 
 from cms_config import DEFAULT_CMS_CONFIG, CmsConfig
-from cms_report import LINE_LABELS, CmsAnalysis, analyze_cms
+from cms_report import LINE_LABELS, CmsAnalysis, analyze_cms, bottleneck_report
 from cms_simulation import run_cms_simulation
+from views import kpi_pipeline
 
 _RUN_KEY = "cms_last_run"
+# 다른 탭(프로세스 분석)이 마지막 시뮬레이션 결과를 재사용하기 위한 공개 이름
+RUN_KEY = _RUN_KEY
 
 
 def _render_spec_panel() -> None:
@@ -132,31 +135,75 @@ def _render_capacity(a: CmsAnalysis) -> None:
     )
 
 
-def _render_bottlenecks(a: CmsAnalysis) -> None:
-    st.markdown("#### 🚦 시뮬레이션 가동률과 대기")
+def _render_bottlenecks(a: CmsAnalysis, run: dict | None = None) -> None:
+    st.markdown("#### 🚦 병목 진단 — 무엇이, 누구를, 얼마나 막았나")
     st.caption(
-        "실제로 돌려 보니 각 설비가 얼마나 바빴고, 로트가 앞에서 얼마나 기다렸는지입니다. "
-        "가동률이 95%를 넘고 대기열이 길면 그곳이 병목입니다. "
-        "능력이 모자란 설비는 그 앞이 막혀 오히려 가동률이 낮게 보일 수 있으니 위 표와 함께 보세요."
+        "문서만 봐서는 '가장 느린 공정'까지만 알 수 있습니다. 여기서는 **돌려 봐야 아는 것**을 "
+        "보여 줍니다 — 설비가 모자라 물리적으로 못 도는 곳, 여러 라인이 한 설비를 두고 다투며 "
+        "생긴 대기, 그래서 어느 라인이 계획을 못 채웠는지입니다."
     )
-    rows = [
-        {
-            "설비": b.label + (" ⚠TBD" if b.tbd_count else ""),
-            "대수": b.count,
-            "가동률": b.utilization,
-            "평균 대기(시간)": round(b.avg_wait_min / 60, 1),
-            "최대 대기열": b.max_queue,
-        }
-        for b in a.bottlenecks
-        if b.utilization > 0 or b.max_queue
-    ]
+    if not run:
+        st.info("시뮬레이션을 실행하면 병목 진단이 표시됩니다.")
+        return
+
+    rep = bottleneck_report(run["metrics"], run["cfg"], a)
+
+    for row in rep.rows[:6]:
+        if row.load <= 0 and row.jobs == 0:
+            continue
+        tone = {"능력부족": ("#fdeaea", "#d9534f"), "경합": ("#fdf3e3", "#e08b3c")}.get(
+            row.kind, ("#eef6ee", "#3f9e6a")
+        )
+        waits = " · ".join(
+            f"{LINE_LABELS.get(ln, ln)} {h:,.0f}h" for ln, h in row.wait_by_line[:4]
+        ) or "대기 없음"
+        fix = (
+            f"<br><small>🔧 <b>{row.add_needed}대 증설</b>하면 부하 "
+            f"{row.load * 100:.0f}% → {row.load_after * 100:.0f}%</small>"
+            if row.add_needed
+            else ""
+        )
+        st.markdown(
+            f'<div style="background:{tone[0]};border-left:4px solid {tone[1]};'
+            f'border-radius:8px;padding:0.6rem 1rem;margin-bottom:0.5rem;color:#111827">'
+            f'<b>{row.rank}. {row.label}</b> {row.count}대 '
+            f'<span style="background:{tone[1]};color:#fff;border-radius:4px;'
+            f'padding:0 6px;font-size:0.8em">{row.kind}</span>'
+            f'<br><small>🧮 부하 <code>{row.demand_h:,.0f}h ÷ {row.capacity_h:,.0f}h = '
+            f'{row.load * 100:.0f}%</code> · 가동률 {row.utilization * 100:.0f}% · '
+            f'평균 대기 {row.avg_wait_h:.1f}h · 최대 대기열 {row.max_queue}개</small>'
+            f'<br><small>🔀 이 설비를 두고 다툰 라인 <b>{len(row.lines)}개</b> — {waits}</small>'
+            f'{fix}</div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("##### 📉 라인별 계획 대비 실적 — 경합에 밀린 결과")
+    st.caption("달성률이 낮은 라인은 대개 공유 설비 앞에서 밀린 쪽입니다.")
     st.dataframe(
-        pd.DataFrame(rows),
+        pd.DataFrame(
+            [
+                {
+                    "라인": ln.label,
+                    "달성률": ln.rate,
+                    "계획(m)": round(ln.plan_m),
+                    "실적(m)": round(ln.actual_m),
+                    "대기 비중": ln.wait_share,
+                    "가장 오래 막힌 곳": " · ".join(
+                        f"{lb} {h:,.0f}h" for lb, h in ln.blocked_at[:2]
+                    )
+                    or "-",
+                }
+                for ln in rep.lines
+            ]
+        ),
         hide_index=True,
         use_container_width=True,
         column_config={
-            "가동률": st.column_config.ProgressColumn(
-                "가동률", format="%.0f%%", min_value=0.0, max_value=1.0
+            "달성률": st.column_config.ProgressColumn(
+                "달성률", format="%.0f%%", min_value=0.0, max_value=1.0
+            ),
+            "대기 비중": st.column_config.ProgressColumn(
+                "대기 비중", format="%.0f%%", min_value=0.0, max_value=1.0
             ),
         },
     )
@@ -446,6 +493,7 @@ def render_page(cfg: CmsConfig | None = None, run: bool = False) -> None:
         st.session_state[_RUN_KEY] = {
             "analysis": analyze_cms(metrics, cfg),
             "metrics": metrics,
+            "cfg": cfg,
             "elapsed": elapsed,
         }
 
@@ -469,11 +517,13 @@ def render_page(cfg: CmsConfig | None = None, run: bool = False) -> None:
     st.divider()
     _render_capacity(a)
     st.divider()
-    _render_bottlenecks(a)
+    _render_bottlenecks(a, run_state)
     st.divider()
     _render_machines(a)
     st.divider()
     _render_output(a)
+    st.divider()
+    kpi_pipeline.render(run_state)
     st.divider()
     _render_optimizer(a, cfg)
 
