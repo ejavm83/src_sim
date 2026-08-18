@@ -17,6 +17,14 @@ from cms_config import DEFAULT_CMS_CONFIG, CmsConfig
 
 _TBD = "⚠"
 
+# 사양을 다시 만들면 이 값을 올린다 — 위젯 key가 바뀌어야 새 기본값을 따른다.
+SPEC_NONCE_KEY = "cms_spec_nonce"
+
+
+def bump_spec_nonce() -> None:
+    """사양이 갱신됐음을 알린다. 다음 실행에서 사이드바가 새 값으로 다시 그려진다."""
+    st.session_state[SPEC_NONCE_KEY] = st.session_state.get(SPEC_NONCE_KEY, 0) + 1
+
 
 def _count(cfg: CmsConfig, key: str, label: str, hi: int, help: str = "") -> int:
     """설비 대수 슬라이더. SOP 미확인 대수는 라벨에 ⚠를 붙인다."""
@@ -28,7 +36,7 @@ def _count(cfg: CmsConfig, key: str, label: str, hi: int, help: str = "") -> int
         tip += "SOP 미확인(질문 #1) — 가정값입니다."
     return int(
         st.slider(shown, 1, hi, max(1, min(hi, spec.count)), 1, help=tip or None,
-                  key=f"cms_n_{key}")
+                  key=f"cms_n_{key}_v{st.session_state.get(SPEC_NONCE_KEY, 0)}")
     )
 
 

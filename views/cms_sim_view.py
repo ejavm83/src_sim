@@ -22,6 +22,7 @@ def _render_spec_panel() -> None:
     from pathlib import Path
 
     from process_spec import DEFAULT_SPEC_PATH, load_spec, save_spec, validate_spec
+    from ui.cms_sidebar import bump_spec_nonce
     from spec_from_md import spec_from_markdown
     from views.process_description import doc_path
 
@@ -61,13 +62,17 @@ def _render_spec_panel() -> None:
                         st.markdown(f"- {p}")
                 else:
                     save_spec(new_spec)
-                    st.success(
+                    for n in notes:
+                        st.info(n)
+                    # 사이드바 위젯이 새 사양 값을 따르도록 key를 갈아끼우고 다시 그린다
+                    bump_spec_nonce()
+                    st.session_state.pop(_RUN_KEY, None)
+                    st.session_state["_cms_spec_toast"] = (
                         f"사양을 다시 만들었습니다 — 설비 {len(new_spec['equipment'])}종 · "
                         f"단계 {sum(len(r['steps']) for r in new_spec['routes'].values())}개. "
-                        "사이드바 값이 갱신되도록 화면을 새로고침하세요."
+                        "사이드바 값이 갱신되었습니다."
                     )
-                for n in notes:
-                    st.info(n)
+                    st.rerun()
 
 
 def _render_changed_from_sop(cfg: CmsConfig) -> None:
@@ -190,6 +195,9 @@ def render_page(cfg: CmsConfig | None = None, run: bool = False) -> None:
         "교체 시간은 6.2, 캘린더(주 116시간 가동·가동률 92.6%)는 6.3을 그대로 따릅니다. "
         "**설비 대수와 시나리오는 왼쪽 사이드바**에서 공정별로 조정합니다."
     )
+
+    if st.session_state.get("_cms_spec_toast"):
+        st.success(st.session_state.pop("_cms_spec_toast"))
 
     cfg = cfg or DEFAULT_CMS_CONFIG
     _render_spec_panel()

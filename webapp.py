@@ -348,7 +348,8 @@ with st.sidebar:
     st.header("⚙️ 시뮬레이션 파라미터")
 
     if _MODEL == MODEL_CMS:
-        cms_cfg, cms_run_btn = render_cms_sidebar(st.session_state.get(CMS_CFG_KEY))
+        # 항상 사양 파일을 다시 읽는다 — MD에서 사양을 재생성하면 바로 반영되도록.
+        cms_cfg, cms_run_btn = render_cms_sidebar()
         st.session_state[CMS_CFG_KEY] = cms_cfg
     else:
         try:
