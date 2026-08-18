@@ -90,6 +90,52 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
+def _collapse_sidebar_on_open() -> None:
+    """좌측 파라미터 메뉴를 접힌 상태로 시작한다.
+
+    `initial_sidebar_state="collapsed"`만으로는 부족하다 — Streamlit 프런트엔드는
+    **사용자가 한 번 펼친 기록**(localStorage `stSidebarCollapsed-`)을 그 설정보다
+    우선하기 때문에, 한 번 펼친 브라우저는 그 뒤로 계속 펼친 채 열린다.
+
+    그래서 페이지를 새로 열 때 **딱 한 번** 접힌 상태로 되돌린다. 화면을 다시
+    그리는 것(rerun)에는 관여하지 않으므로, 작업 중에 사용자가 펼쳐 둔 메뉴는
+    그대로 유지된다.
+    """
+    import streamlit.components.v1 as components
+
+    components.html(
+        """
+        <script>
+        (function () {
+          const w = window.parent;
+          // 페이지를 새로 연 경우에만 — rerun 때마다 접으면 작업을 방해한다
+          if (!w || w.__cmsSidebarDefaultApplied) return;
+          w.__cmsSidebarDefaultApplied = true;
+
+          // 다음 방문부터는 Streamlit 자신이 접힌 상태로 열도록 기록을 맞춰 둔다
+          try {
+            for (const k of Object.keys(w.localStorage)) {
+              if (k.startsWith("stSidebarCollapsed")) {
+                w.localStorage.setItem(k, "true");
+              }
+            }
+          } catch (e) { /* 저장소 접근이 막혀도 아래 접기는 동작한다 */ }
+
+          // 이미 펼쳐진 채 떠 있으면 지금 접는다
+          const sidebar = w.document.querySelector('[data-testid="stSidebar"]');
+          if (!sidebar || sidebar.getAttribute("aria-expanded") !== "true") return;
+          const btn = sidebar.querySelector('[data-testid="stSidebarCollapseButton"] button');
+          if (btn) btn.click();
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
+
+_collapse_sidebar_on_open()
+
 if "last_run" not in st.session_state:
     st.session_state.last_run = None
 if "saved_runs" not in st.session_state:
