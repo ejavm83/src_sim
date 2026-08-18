@@ -294,9 +294,7 @@ def parse_routes(md: str) -> tuple[dict[str, dict[str, Any]], list[str]]:
                 # 라우팅에는 넣지 않지만(이중 계산 방지) 위치는 설비 식별에 쓴다
                 eq_key = _equip_for(seq, line, label)
                 if eq_key:
-                    flow_locs.setdefault(eq_key, []).extend(
-                        c for c in re.findall(r"[A-Z]+\d+", r[1].upper())
-                    )
+                    flow_locs.setdefault(eq_key, []).append(r[1])
                 continue
             equip = _equip_for(seq, line, label)
             if equip is None:
@@ -383,6 +381,18 @@ def _rescale_plain_cu44(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return steps
 
 
+def station_codes(raw_loc: str) -> list[str]:
+    """위치 표기 → 설비가 놓인 **지점** 코드 목록.
+
+    화살표(→)는 한 설비의 시작→완료이므로 첫 코드만 남긴다.
+    가운뎃점(·)·쉼표는 서로 다른 지점이므로 모두 남긴다.
+    """
+    text = str(raw_loc).upper()
+    if "→" in text or "->" in text:
+        text = re.split(r"→|->", text)[0]
+    return re.findall(r"[A-Z]+\d+", text)
+
+
 def assign_machine_ids(
     equipment: dict[str, dict[str, Any]],
     routes: dict[str, dict[str, Any]],
@@ -390,23 +400,30 @@ def assign_machine_ids(
 ) -> None:
     """라우팅 표의 위치 코드로 개별 설비 식별자를 부여한다 (SOP 2.6).
 
-    같은 유형 설비라도 현장에서는 위치·번호로 구분되는 별개의 기계다.
-    위치 코드가 대수와 같으면 그대로 쓰고(절연압출기 2대 -> E12·E13),
-    대수가 더 많으면 위치 안에서 번호를 매긴다(편조기 21대 -> E18-1..E18-21).
+    **위치 코드는 설비 번호가 아니라 공정 지점이다.** 원본 엑셀을 보면
+    「A2 멀티신선 시작 / A3 멀티신선 완료」, 「S4 편조기 시작 / S5 편조기 완료」처럼
+    한 설비가 시작·완료 두 지점을 갖는다. MD 라우팅 표는 이를 화살표로 적는다.
+
+      "E12→E13"  한 설비의 시작→완료  → 설비 위치는 **E12** 하나
+      "A6·A7"    서로 다른 두 지점      → 설비 위치는 A6, A7 둘
+
+    그래서 화살표는 첫 코드만 취하고, 가운뎃점·쉼표는 모두 취한다. 대수가
+    지점 수보다 많으면 지점 안에서 번호를 매긴다(편조기 21대 -> E18-1..E18-21).
     """
     locs: dict[str, list[str]] = {}
-    for key, codes in (extra_locs or {}).items():
+
+    def add(key: str, raw_loc: str) -> None:
         bucket = locs.setdefault(key, [])
-        for c in codes:
-            if c not in bucket:
-                bucket.append(c)
+        for code in station_codes(raw_loc):
+            if code not in bucket:
+                bucket.append(code)
+
+    for key, raws in (extra_locs or {}).items():
+        for raw in raws:
+            add(key, raw)
     for route in routes.values():
         for step in route.get("steps", []):
-            key = str(step.get("equip"))
-            for code in re.findall(r"[A-Z]+\d+", str(step.get("loc", "")).upper()):
-                bucket = locs.setdefault(key, [])
-                if code not in bucket:
-                    bucket.append(code)
+            add(str(step.get("equip")), str(step.get("loc", "")))
 
     for key, spec in equipment.items():
         codes = locs.get(key, [])
