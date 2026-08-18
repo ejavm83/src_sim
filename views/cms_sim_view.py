@@ -315,6 +315,108 @@ def _render_kpis(a: CmsAnalysis, cfg: CmsConfig) -> None:
                     )
 
 
+def _render_optimizer(a: CmsAnalysis, cfg: CmsConfig) -> None:
+    """CP-SAT 설비 증설 최적화 — '그럼 어떻게 바꿔야 하나'에 답한다."""
+    from cms_optimizer import apply_additions, solve_max_throughput, solve_min_additions
+
+    st.markdown("#### 🎯 설비 증설 최적화 (CP-SAT)")
+    st.caption(
+        "시뮬레이션이 **지금 구성에서 무슨 일이 벌어지는지**를 보여 준다면, 여기서는 "
+        "**어디에 몇 대를 더 놓아야 하는지**를 풉니다. 정수계획 문제라 CP-SAT이 "
+        "최적해를 보장합니다 — 슬라이더를 돌려 찾은 값이 아니라 증명된 최소 조합입니다."
+    )
+
+    mode = st.radio(
+        "무엇을 풀까요?",
+        ["최소 증설 — 모든 병목 해소", "예산 제한 — 주어진 대수로 최대 물량"],
+        key="cms_opt_mode",
+        horizontal=True,
+    )
+    min_mode = mode.startswith("최소")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if min_mode:
+            target = st.slider(
+                "목표 부하 상한 (%)", 70, 100, 100, 5,
+                help="모든 설비를 이 부하 아래로 낮춥니다. 100%는 '겨우 소화', "
+                     "85%는 변동에 견딜 여유를 둔 설계입니다.",
+            )
+        else:
+            budget = st.slider("증설 가능 대수", 1, 60, 10, 1)
+    with c2:
+        st.caption(
+            "비용은 설비 유형별 상대 가중치입니다 — 조사기 8 · 압출기 4 · "
+            "편조기 1 · 검사 0.5. 실제 견적이 있으면 알려 주세요."
+        )
+
+    if not st.button("🧮 최적 구성 계산", use_container_width=True, key="cms_opt_run"):
+        return
+
+    try:
+        res = (
+            solve_min_additions(cfg, a, target_load=target / 100.0)
+            if min_mode
+            else solve_max_throughput(cfg, a, budget_units=budget)
+        )
+    except RuntimeError as exc:
+        st.error(str(exc))
+        return
+
+    if not res.ok:
+        st.error(f"{res.message} (상태: {res.status})")
+        return
+
+    if min_mode:
+        st.success(
+            f"최적해({res.status}) — **총 {res.total_added}대 증설**, "
+            f"가중비용 {res.total_cost:.1f}"
+        )
+    else:
+        st.success(
+            f"최적해({res.status}) — 증설 {res.total_added}대로 "
+            f"**계획 물량의 {res.throughput_ratio:.0%}**까지 소화"
+        )
+
+    if res.changed:
+        st.dataframe(
+            pd.DataFrame([
+                {
+                    "설비": r.label,
+                    "현재": r.now,
+                    "증설": f"+{r.add}",
+                    "변경 후": r.now + r.add,
+                    "부하(현재)": r.load_before,
+                    "부하(변경 후)": r.load_after,
+                }
+                for r in res.changed
+            ]),
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                "부하(현재)": st.column_config.ProgressColumn(
+                    "부하(현재)", format="%.0f%%", min_value=0.0, max_value=2.5
+                ),
+                "부하(변경 후)": st.column_config.ProgressColumn(
+                    "부하(변경 후)", format="%.0f%%", min_value=0.0, max_value=2.5
+                ),
+            },
+        )
+    else:
+        st.info("증설 없이도 목표를 만족합니다.")
+
+    for n in res.notes:
+        st.caption(n)
+
+    if res.changed:
+        st.session_state["_cms_opt_cfg"] = apply_additions(cfg, res)
+        st.caption(
+            "이 구성으로 실제로 돌려 보려면 사이드바에서 위 대수를 반영한 뒤 "
+            "**🚀 시뮬레이션 실행**을 누르세요. 정적 계산과 시뮬 결과가 일치하는지 "
+            "확인하는 것이 이 도구의 검증 방법입니다."
+        )
+
+
 def render_page(cfg: CmsConfig | None = None, run: bool = False) -> None:
     st.header("🏭 CMS 전선공장 시뮬레이션")
     st.caption(
@@ -372,6 +474,8 @@ def render_page(cfg: CmsConfig | None = None, run: bool = False) -> None:
     _render_machines(a)
     st.divider()
     _render_output(a)
+    st.divider()
+    _render_optimizer(a, cfg)
 
     with st.expander("이 모델이 세운 가정 (SOP가 미확정으로 남긴 부분)", expanded=False):
         for n in a.notes:
