@@ -7,9 +7,24 @@ from pathlib import Path
 import streamlit as st
 
 from views.process_doc_highlight import markdown_for_preview
+from views.process_doc_images import embed_local_images, missing_images
 
-# 프로젝트 루트 기준 공정 설명 문서
-PROCESS_DOC_PATH = Path(__file__).resolve().parent.parent / "data" / "공정설명260521.md"
+# 공정 모델별 설명 문서. 사이드바에서 고른 모델에 따라 바뀐다.
+_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DOC_PATH_BY_MODEL = {
+    "CMS 전선공장": _DATA_DIR / "공정설명260521.md",
+    "SCR 구리공장": _DATA_DIR / "공정설명_SCR.md",
+}
+
+
+def doc_path() -> Path:
+    """현재 선택된 공정 모델의 설명 문서 경로."""
+    model = st.session_state.get("active_process_model", "CMS 전선공장")
+    return DOC_PATH_BY_MODEL.get(model, DOC_PATH_BY_MODEL["CMS 전선공장"])
+
+
+# 이전 이름 호환 — 기본(CMS) 문서 경로
+PROCESS_DOC_PATH = DOC_PATH_BY_MODEL["CMS 전선공장"]
 _SESSION_DRAFT_KEY = "process_description_md_draft"
 _RELOAD_FROM_DISK_FLAG = "process_description_reload_from_disk"
 _EDIT_MODE_KEY = "process_description_editing"
@@ -37,9 +52,10 @@ def _sync_llm_extract_session() -> None:
 
 
 def _load_text() -> str:
-    if not PROCESS_DOC_PATH.is_file():
+    doc = doc_path()
+    if not doc.is_file():
         return ""
-    return PROCESS_DOC_PATH.read_text(encoding="utf-8")
+    return doc.read_text(encoding="utf-8")
 
 
 def _extract_with_doc_baseline(md_text: str):
@@ -61,7 +77,18 @@ def _extract_with_doc_baseline(md_text: str):
     )
 
 
+_ACTIVE_DOC_KEY = "process_description_active_doc"
+
+
 def render() -> None:
+    DOC = doc_path()
+
+    # 공정 모델이 바뀌면 다른 문서이므로 편집 중이던 초안을 버린다.
+    if st.session_state.get(_ACTIVE_DOC_KEY) != str(DOC):
+        st.session_state[_ACTIVE_DOC_KEY] = str(DOC)
+        st.session_state[_EDIT_MODE_KEY] = False
+        st.session_state.pop(_SESSION_DRAFT_KEY, None)
+
     is_editing = bool(st.session_state.get(_EDIT_MODE_KEY, False))
 
     # 편집 모드에서만: 디스크 재로드(위젯 `key=_SESSION_DRAFT_KEY` 보다 먼저 실행)
@@ -83,13 +110,13 @@ def render() -> None:
 
     st.header("📄 공정 설명 문서")
     st.caption(
-        f"파일: `{PROCESS_DOC_PATH.relative_to(PROCESS_DOC_PATH.parent.parent)}` — "
+        f"파일: `{DOC.relative_to(DOC.parent.parent)}` — "
         "기본은 읽기 전용입니다. **편집**으로 수정하거나, 아래에서 **.md 파일**을 가져오기/보내기 할 수 있습니다. "
         "읽기 화면에서는 숫자·단위만 자동 강조되며, 파일에는 HTML 태그를 넣지 않아도 됩니다. "
         "**🌳 공정 트리** 탭에서 공정 구조를 추출·편집하고 **시뮬레이션에 적용**할 수 있습니다."
     )
 
-    if not PROCESS_DOC_PATH.is_file():
+    if not DOC.is_file():
         st.warning(
             "아직 파일이 없습니다. **편집**에서 내용을 입력한 뒤 **파일에 저장**하면 `data/` 아래에 생성됩니다."
         )
@@ -114,9 +141,9 @@ def render() -> None:
                 else _load_text()
             )
             st.download_button(
-                label=f"{PROCESS_DOC_PATH.name} 받기",
+                label=f"{DOC.name} 받기",
                 data=_export_text.encode("utf-8"),
-                file_name=PROCESS_DOC_PATH.name,
+                file_name=DOC.name,
                 mime="text/markdown; charset=utf-8",
                 use_container_width=True,
                 help="지금 보이는 내용(읽기: 디스크 기준, 편집: 편집 중인 초안)을 .md 파일로 저장합니다.",
@@ -157,7 +184,17 @@ def render() -> None:
     else:
         body = _load_text()
         if body.strip():
-            st.markdown(markdown_for_preview(body), unsafe_allow_html=True)
+            missing = missing_images(body, DOC.parent)
+            if missing:
+                st.warning(
+                    "문서가 참조하는 그림 파일이 `data/` 아래에 없습니다 — "
+                    + " · ".join(f"`{p}`" for p in missing[:8])
+                    + f"\n\n원본 폴더의 `images/`를 `data/images/`로 복사하면 그림이 표시됩니다."
+                )
+            st.markdown(
+                embed_local_images(markdown_for_preview(body), DOC.parent),
+                unsafe_allow_html=True,
+            )
         else:
             st.info("파일이 비어 있거나 없습니다. **편집**을 눌러 내용을 작성하세요.")
         _, btn_col = st.columns([4, 1])
@@ -168,8 +205,8 @@ def render() -> None:
 
     if save:
         try:
-            PROCESS_DOC_PATH.parent.mkdir(parents=True, exist_ok=True)
-            PROCESS_DOC_PATH.write_text(
+            DOC.parent.mkdir(parents=True, exist_ok=True)
+            DOC.write_text(
                 str(st.session_state.get(_SESSION_DRAFT_KEY, "")),
                 encoding="utf-8",
             )

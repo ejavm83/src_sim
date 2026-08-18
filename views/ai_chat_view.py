@@ -271,14 +271,14 @@ def _commit_json(
 
 def _apply_md_update(md_updated: str) -> None:
     from views.process_description import (
-        PROCESS_DOC_PATH,
         _EDIT_MODE_KEY,
         _SESSION_DRAFT_KEY,
+        doc_path,
     )
     if not md_updated.strip():
         return
     try:
-        PROCESS_DOC_PATH.write_text(md_updated, encoding="utf-8")
+        doc_path().write_text(md_updated, encoding="utf-8")
         st.session_state[_SESSION_DRAFT_KEY] = md_updated
         st.session_state[_EDIT_MODE_KEY] = False
     except Exception as exc:

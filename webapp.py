@@ -14,13 +14,16 @@ from config_sanitize import sanitize_for_simulation, simulation_config_issues
 from report import Analysis, analyze
 from run_compare import MAX_SNAPSHOTS, flatten_config, snapshot
 from simulation import run_simulation
+from cms_config import DEFAULT_CMS_CONFIG as CMS_DEFAULT_CONFIG
 from ui.app_settings import sync_gemini_api_key_session
+from ui.cms_sidebar import render_cms_sidebar
 from ui.compare_panel import render_compare_panel
 from ui.results import render_results
 from ui.sidebar_params import render_config_sidebar
 from ui.snapshot_store import load_saved_snapshots, save_snapshots_to_disk
 from views import (
     ai_chat_view,
+    cms_sim_view,
     domain_analysis_view,
     parameter_reference,
     process_description,
@@ -113,7 +116,23 @@ APP_VERSION_INFO = "v0.3.0-generic (2026.07.01 16:17)"
 MAIN_TABS_KEY = "main_tabs"
 MAIN_TABS_WIDGET_KEY = f"{MAIN_TABS_KEY}_v16"
 TAB_SIM_LABEL = "🔬 분석 결과"
+TAB_CMS_SIM_LABEL = "🏭 CMS 공장 시뮬레이션"
+TAB_SCR_SIM_LABEL = "🏭 SCR 공장 시뮬레이션"
+CMS_CFG_KEY = "cms_sidebar_cfg"
 TAB_COMPARE_LABEL = "🆚 스냅샷 비교"
+
+# 공정 모델 선택 — 두 도메인을 선택적으로 쓴다.
+MODEL_KEY = "active_process_model"
+MODEL_CMS = "CMS 전선공장"
+MODEL_SCR = "SCR 구리공장"
+MODEL_CAPTIONS = {
+    MODEL_CMS: "멕시코 CMS 공장 SOP v0.3 — 신선·연선·절연·조사·편조·시스·재권취",
+    MODEL_SCR: "구 모델 — 입고·선별·용해·주조·출하",
+}
+
+
+def active_model() -> str:
+    return st.session_state.get(MODEL_KEY, MODEL_CMS)
 TAB_PROCESS_DOC_LABEL = "📄 공정 설명"
 TAB_PROCESS_TREE_LABEL = "🌳 공정 트리"
 TAB_STANDARD_JSON_LABEL = "📐 표준 JSON"
@@ -211,11 +230,13 @@ def _handle_dev_tabs_shortcut() -> None:
 
 
 def _visible_main_tab_labels() -> list[str]:
-    labels = [
-        TAB_SIM_LABEL,
-        TAB_COMPARE_LABEL,
-        TAB_PROCESS_DOC_LABEL,
-    ]
+    labels = [TAB_SIM_LABEL]
+    # 선택한 공정 모델의 시뮬레이션 탭만 띄운다.
+    if active_model() == MODEL_CMS:
+        labels.append(TAB_CMS_SIM_LABEL)
+    else:
+        labels.extend([TAB_SCR_SIM_LABEL, TAB_COMPARE_LABEL])
+    labels.append(TAB_PROCESS_DOC_LABEL)
     if st.session_state.get(_DEV_TABS_VISIBLE_KEY, False):
         labels.append(TAB_PROCESS_TREE_LABEL)
     labels.extend(
@@ -282,9 +303,21 @@ st.markdown(
 _handle_dev_tabs_shortcut()
 _bootstrap_doc_extracted_config()
 
+# 공정 모델 선택 — 탭 구성이 여기에 좌우되므로 `st.tabs`보다 먼저 그린다.
+with st.sidebar:
+    st.caption(APP_VERSION_INFO)
+    st.radio(
+        "🏭 공정 모델",
+        [MODEL_CMS, MODEL_SCR],
+        key=MODEL_KEY,
+        captions=[MODEL_CAPTIONS[MODEL_CMS], MODEL_CAPTIONS[MODEL_SCR]],
+        help="어느 공장을 시뮬레이션할지 고릅니다. 파라미터와 탭이 함께 바뀝니다.",
+    )
+    st.divider()
+
 # 시뮬 완료·파라미터 추출 완료: 다음 rerun 직후·`st.tabs` 이전에 해당 탭으로 포커스
 if st.session_state.pop(_FOCUS_SIM_TAB_AFTER_RUN, False):
-    st.session_state[MAIN_TABS_WIDGET_KEY] = TAB_SIM_LABEL
+    st.session_state[MAIN_TABS_WIDGET_KEY] = TAB_SCR_SIM_LABEL
 if st.session_state.pop(FOCUS_PARAMS_TAB_AFTER_EXTRACT, False):
     st.session_state[MAIN_TABS_WIDGET_KEY] = TAB_EXTRACTED_PARAMS_LABEL
 
@@ -301,34 +334,43 @@ _tab_by_label = dict(zip(_tab_labels, _tab_ctxs, strict=True))
 
 _SHOW_SIM_PARAMS_KEY = "_show_sim_params"
 
+_MODEL = active_model()
+
+# 선택한 모델의 파라미터만 사이드바에 그린다.
+cms_cfg, cms_run_btn = st.session_state.get(CMS_CFG_KEY, CMS_DEFAULT_CONFIG), False
+cfg, run_btn = DEFAULT_CONFIG, False
+
 with st.sidebar:
-    st.caption(APP_VERSION_INFO)
     domain_name = st.session_state.get("_domain_name", "")
     if domain_name:
         st.caption(f"🏷️ **{domain_name}**")
-    st.divider()
 
     st.header("⚙️ 시뮬레이션 파라미터")
-    try:
-        from excel_config import default_excel_path
-        st.caption(f"기본값 파일: `{default_excel_path().name}` (`data/`)")
-    except Exception:
-        st.caption("기본값: 코드 내장")
 
-    from llm_config import EXTRACTED_CHANGE_DETAILS_KEY, EXTRACTED_CHANGED_LABELS_KEY
-    cfg_base = st.session_state.get("extracted_config", DEFAULT_CONFIG)
-    _changed_labels = st.session_state.get(EXTRACTED_CHANGED_LABELS_KEY) or set()
-    _change_details = st.session_state.get(EXTRACTED_CHANGE_DETAILS_KEY) or {}
-    _cfg_nonce = st.session_state.get("config_nonce", 0)
-    cfg = render_config_sidebar(
-        cfg_base,
-        key_suffix=f"_v{_cfg_nonce}",
-        highlight_labels=_changed_labels,
-        change_details=_change_details,
-    )
-    run_btn = st.button("🚀 시뮬레이션 실행", type="primary", use_container_width=True)
-    st.divider()
-    st.text_input("다음 실행 시 저장될 제목", key="snap_name", label_visibility="collapsed")
+    if _MODEL == MODEL_CMS:
+        cms_cfg, cms_run_btn = render_cms_sidebar(st.session_state.get(CMS_CFG_KEY))
+        st.session_state[CMS_CFG_KEY] = cms_cfg
+    else:
+        try:
+            from excel_config import default_excel_path
+            st.caption(f"기본값 파일: `{default_excel_path().name}` (`data/`)")
+        except Exception:
+            st.caption("기본값: 코드 내장")
+
+        from llm_config import EXTRACTED_CHANGE_DETAILS_KEY, EXTRACTED_CHANGED_LABELS_KEY
+        cfg_base = st.session_state.get("extracted_config", DEFAULT_CONFIG)
+        _changed_labels = st.session_state.get(EXTRACTED_CHANGED_LABELS_KEY) or set()
+        _change_details = st.session_state.get(EXTRACTED_CHANGE_DETAILS_KEY) or {}
+        _cfg_nonce = st.session_state.get("config_nonce", 0)
+        cfg = render_config_sidebar(
+            cfg_base,
+            key_suffix=f"_v{_cfg_nonce}",
+            highlight_labels=_changed_labels,
+            change_details=_change_details,
+        )
+        run_btn = st.button("🚀 시뮬레이션 실행", type="primary", use_container_width=True)
+        st.divider()
+        st.text_input("다음 실행 시 저장될 제목", key="snap_name", label_visibility="collapsed")
 
 if st.session_state.get("_save_toast"):
     st.toast(st.session_state.pop("_save_toast"), icon="💾")
@@ -377,24 +419,33 @@ if run_btn:
 with _tab_by_label[TAB_SIM_LABEL]:
     domain_analysis_view.render_page()
 
-    run = st.session_state.last_run
-    if run is not None:
-        st.divider()
-        st.markdown("#### 🏭 물류 시뮬레이션 상세 결과")
-        render_results(run["metrics"], run["cfg"], run["analysis"])
+if TAB_CMS_SIM_LABEL in _tab_by_label:
+    with _tab_by_label[TAB_CMS_SIM_LABEL]:
+        cms_sim_view.render_page(cms_cfg, cms_run_btn)
 
-with _tab_by_label[TAB_COMPARE_LABEL]:
-    st.markdown(
-        "저장해 둔 실행 스냅샷끼리 **KPI·파라미터·자원 가동률·일별 생산 추이**를 한 화면에서 비교합니다. "
-        "각 블록 아래에는 **무엇이 달라졌는지(비교 요약)**와 **그 결과가 의미하는 바(시사점)**를 따로 적어 두었습니다. "
-        "새 스냅샷은 **🏭 시뮬레이션** 탭에서 실행할 때마다 **자동 저장**됩니다."
-    )
-    if st.session_state.saved_runs:
-        render_compare_panel(st.session_state.saved_runs, expanded=True)
-    else:
-        st.info(
-            "아직 저장된 스냅샷이 없습니다. **🏭 시뮬레이션** 탭에서 한 번 실행하면 자동으로 첫 스냅샷이 쌓입니다."
+if TAB_SCR_SIM_LABEL in _tab_by_label:
+    with _tab_by_label[TAB_SCR_SIM_LABEL]:
+        st.header("🏭 SCR 구리공장 시뮬레이션")
+        st.caption(
+            "입고·선별/압착·용해·주조·출하의 5단계 물류 모델입니다. "
+            "파라미터는 왼쪽 사이드바에서 조정하고, 실행할 때마다 스냅샷이 자동 저장됩니다."
         )
+        run = st.session_state.last_run
+        if run is None:
+            st.info("사이드바의 **🚀 시뮬레이션 실행**을 누르면 결과가 여기에 표시됩니다.")
+        else:
+            render_results(run["metrics"], run["cfg"], run["analysis"])
+
+if TAB_COMPARE_LABEL in _tab_by_label:
+    with _tab_by_label[TAB_COMPARE_LABEL]:
+        st.markdown(
+            "저장해 둔 **SCR 공장** 실행 스냅샷끼리 "
+            "**KPI·파라미터·자원 가동률·일별 생산 추이**를 한 화면에서 비교합니다."
+        )
+        if st.session_state.saved_runs:
+            render_compare_panel(st.session_state.saved_runs, expanded=True)
+        else:
+            st.info("아직 저장된 스냅샷이 없습니다. 사이드바에서 한 번 실행하면 쌓입니다.")
 
 with _tab_by_label[TAB_PROCESS_DOC_LABEL]:
     process_description.render()
