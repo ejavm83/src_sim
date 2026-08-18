@@ -73,7 +73,12 @@ def default_equipment() -> dict[str, Equipment]:
         Equipment("rewind1050", "재권취기(1050Φ)", 2, 30.0, ("CU44", "AL16")),
         Equipment("rewind1250", "재권취기(1250Φ)", 2, 30.0, ("CU19",)),
         # 실리콘 HV 전용 — 편조·테이핑·시스 대수 미확인(질문 #1)
-        Equipment("sil_ext", "실리콘 압출기", 2, 60.0, ("SIL",)),
+        # S2 압출기 2대는 재질 전용이다: 좌측 CU, 우측 AL (SOP 6.1·실리콘!C3).
+        # 서로 대신 쓸 수 없으므로 한 재질이 쓸 수 있는 능력은 2대가 아니라 1대다.
+        Equipment("sil_ext_al", "실리콘 압출기(우 · AL 전용)", 1, 60.0, ("SIL",),
+                  machines=("S2-R",)),
+        Equipment("sil_ext_cu", "실리콘 압출기(좌 · CU 전용)", 1, 60.0, ("SIL_CU",),
+                  machines=("S2-L",)),
         # 실리콘 편조(S4·S5)·테이핑(S6·S7)은 Cu44의 E18·E19와 위치가 달라 별도 설비 (SOP 2.6)
         Equipment("sil_braider", "편조기(실리콘 S4·S5)", 10, 60.0, ("SIL",), tbd_count=True),
         Equipment("sil_taping", "테이핑기(실리콘 S6·S7)", 2, 30.0, ("SIL",), tbd_count=True),
@@ -169,14 +174,19 @@ def _al16_steps() -> list[Step]:
 
 
 def _sil_steps() -> list[Step]:
-    """SOP 5.4 실리콘 HV 라우팅. 실리콘은 압출 중 가교되어 조사 공정이 없다."""
+    """SOP 5.4 실리콘 HV 라우팅. 실리콘은 압출 중 가교되어 조사 공정이 없다.
+
+    모델이 도는 물량(`sil_month_m` = 350,000m)은 SOP·엑셀이 명시한 **AL 기준**
+    물량이므로(질문 #18) 우측 AL 전용 압출기만 쓴다. 좌측 CU 전용기는 CU 물량이
+    확인되지 않아 이 라우팅에 등장하지 않는다.
+    """
     return [
         # 5,000m 도체 → 1,000m 보빈 ×5
-        Step("3.2", "실리콘 압출", "sil_ext", 50.0, split=5, out_len_m=1_000),
+        Step("3.2", "실리콘 압출", "sil_ext_al", 50.0, split=5, out_len_m=1_000, loc="S2"),
         Step("4.1", "편조(차폐)", "sil_braider", 666.7, out_len_m=1_000),
         Step("4.2", "테이핑", "sil_taping", 50.0, out_len_m=1_000),
-        # 시스도 절연과 같은 S2·S3 실리콘 압출기를 다시 쓴다 (SOP 2.6·질문 #18)
-        Step("5.1", "시스 압출", "sil_ext", 66.7, out_len_m=1_000),
+        # 시스도 절연과 같은 S2·S3 압출기를 다시 쓴다 — 같은 전용기와 경합 (SOP 2.6·질문 #18)
+        Step("5.1", "시스 압출", "sil_ext_al", 66.7, out_len_m=1_000, loc="S2"),
         Step("6.2", "검사", "inspect_sil", 10.0),
     ]
 
@@ -287,3 +297,86 @@ class CmsConfig:
 
 
 DEFAULT_CMS_CONFIG = CmsConfig()
+
+
+# ── 계획 물량·계획 부하 ───────────────────────────────────────────────────
+# 공유 설비의 시간을 어느 라인에 얼마나 나눠 줄지 정하는 기준이자,
+# 정적 능력 대비 부하(cms_report)의 요구량 계산 근거다. 한 곳에서만 계산한다.
+
+
+def line_inputs_per_month(cfg: CmsConfig) -> dict[str, float]:
+    """라인별로 한 달에 라우팅 첫 단계로 들어오는 로트 수.
+
+    앞단(태신선·멀티신선·Cu19 3단 꼬임)은 산문 규칙이라 `flow` 값으로 계산한다.
+    """
+    cond, inb = cfg.conductor, cfg.inbound
+
+    rod_bobbins = inb.cu_trucks_per_month * inb.cu_ton_per_truck / cond.taeshin_bobbin_ton
+    batches = rod_bobbins * cond.carriers_per_bobbin / cond.multi_carriers_per_batch
+    total_cycle = max(1, cond.cycle_cu44 + cond.cycle_cu19)
+    b44 = batches * cond.cycle_cu44 / total_cycle
+    b19 = batches * cond.cycle_cu19 / total_cycle
+
+    # Cu44: 멀티신선이 낸 소선 보빈이 연선(라우팅 첫 단계)으로 들어간다
+    cu44_bobbins = b44 * cond.multi_cu44_bobbins
+    # Cu19: 집합·연선을 거쳐 튜블러가 낸 다발이 절연(라우팅 첫 단계)으로 들어간다
+    pairs = b19 * cond.multi_cu19_bobbins / 2
+    cu19_lots = pairs * cond.tubular_out_lots
+
+    return {
+        "CU44": cu44_bobbins * (1.0 - cfg.cu44_shield_ratio),
+        "CU44S": cu44_bobbins * cfg.cu44_shield_ratio,
+        "CU19": cu19_lots,
+        "AL16": inb.al_days * (inb.al_ton_per_day / 0.2),
+        "SIL": cfg.sil_month_m / 1_000 / 5,   # 5,000m 로트가 1,000m ×5로 갈라짐
+    }
+
+
+def planned_equip_load(cfg: CmsConfig) -> dict[str, dict[str, float]]:
+    """설비별·라인별 월 요구 가공시간(분): `{설비: {라인: 분}}`.
+
+    **라우팅을 따라 걸으며** 계산하므로 사양(JSON·MD)의 공정 단계를 고치면
+    이 값도 함께 바뀐다. 앞단 공유 설비만 `flow` 값으로 따로 더한다.
+
+    시뮬레이션은 이 값을 공유 설비의 **배분 몫**으로 쓴다 — 계획상 시간을
+    많이 필요로 하는 라인이 그만큼 더 가져가고, 적게 필요한 라인도 자기 몫만큼은
+    받는다. 그래서 물량이 큰 라인이 공유 설비를 독차지해 다른 라인이
+    영영 굶는 일이 생기지 않는다.
+    """
+    cond, inb = cfg.conductor, cfg.inbound
+    av = cfg.calendar.availability
+    out: dict[str, dict[str, float]] = {}
+
+    def add(equip: str, line: str, minutes: float) -> None:
+        out.setdefault(equip, {})
+        out[equip][line] = out[equip].get(line, 0.0) + minutes / av
+
+    # ── 앞단(산문 규칙 구간) ──
+    rod_bobbins = inb.cu_trucks_per_month * inb.cu_ton_per_truck / cond.taeshin_bobbin_ton
+    add("taeshin", "CU", rod_bobbins * cond.taeshin_min_per_bobbin)
+
+    batches = rod_bobbins * cond.carriers_per_bobbin / cond.multi_carriers_per_batch
+    total_cycle = max(1, cond.cycle_cu44 + cond.cycle_cu19)
+    b44 = batches * cond.cycle_cu44 / total_cycle
+    b19 = batches * cond.cycle_cu19 / total_cycle
+    add("multi", "CU44", b44 * cond.multi_cu44_min)
+    add("multi", "CU19", b19 * cond.multi_cu19_min)
+
+    bobbins19 = b19 * cond.multi_cu19_bobbins
+    add("bunch19", "CU19", bobbins19 * cond.bunch19_min)
+    add("strand", "CU19", bobbins19 / 2 * cond.strand19_min)   # 절반만 연선 (SOP 7.2)
+    add("tubular", "CU19", bobbins19 / 2 * cond.tubular_min)
+
+    add("multi_al", "AL16", inb.al_days * (inb.al_ton_per_day / 0.2) * cond.multi_al_min)
+
+    # ── 라우팅 구간: 로트가 분할되며 흐르는 대로 따라 걷는다 ──
+    lines = cfg.lines()
+    for key, lots in line_inputs_per_month(cfg).items():
+        line = lines.get(key)
+        if line is None:
+            continue
+        for step in line.steps:
+            lots *= step.split
+            add(step.equip, key, lots * step.minutes)
+
+    return out

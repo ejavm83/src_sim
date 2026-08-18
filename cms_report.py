@@ -8,8 +8,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from cms_config import CmsConfig
+from cms_config import CmsConfig, line_inputs_per_month, planned_equip_load
 from cms_simulation import CmsMetrics
+
+__all__ = ["line_inputs_per_month", "planned_equip_load", "analyze_cms", "CmsAnalysis"]
 
 LINE_LABELS = {
     "CU44": "Cu44 (비차폐)",
@@ -72,75 +74,16 @@ class CmsAnalysis:
         return self.wip_end > self.wip_start * 1.5 + 10
 
 
-def line_inputs_per_month(cfg: CmsConfig) -> dict[str, float]:
-    """라인별로 한 달에 라우팅 첫 단계로 들어오는 로트 수.
-
-    앞단(태신선·멀티신선·Cu19 3단 꼬임)은 산문 규칙이라 `flow` 값으로 계산한다.
-    """
-    cond, inb = cfg.conductor, cfg.inbound
-
-    rod_bobbins = inb.cu_trucks_per_month * inb.cu_ton_per_truck / cond.taeshin_bobbin_ton
-    batches = rod_bobbins * cond.carriers_per_bobbin / cond.multi_carriers_per_batch
-    total_cycle = max(1, cond.cycle_cu44 + cond.cycle_cu19)
-    b44 = batches * cond.cycle_cu44 / total_cycle
-    b19 = batches * cond.cycle_cu19 / total_cycle
-
-    # Cu44: 멀티신선이 낸 소선 보빈이 연선(라우팅 첫 단계)으로 들어간다
-    cu44_bobbins = b44 * cond.multi_cu44_bobbins
-    # Cu19: 집합·연선을 거쳐 튜블러가 낸 다발이 절연(라우팅 첫 단계)으로 들어간다
-    pairs = b19 * cond.multi_cu19_bobbins / 2
-    cu19_lots = pairs * cond.tubular_out_lots
-
-    return {
-        "CU44": cu44_bobbins * (1.0 - cfg.cu44_shield_ratio),
-        "CU44S": cu44_bobbins * cfg.cu44_shield_ratio,
-        "CU19": cu19_lots,
-        "AL16": inb.al_days * (inb.al_ton_per_day / 0.2),
-        "SIL": cfg.sil_month_m / 1_000 / 5,   # 5,000m 로트가 1,000m ×5로 갈라짐
-    }
-
-
 def _monthly_demand_min(cfg: CmsConfig) -> dict[str, float]:
-    """설비별 월 요구 가공시간(분).
+    """설비별 월 요구 가공시간(분) — 라인별 계획 부하를 설비 단위로 합산한 값.
 
-    **라우팅을 따라 걸으며** 계산하므로, 사양(JSON·MD)의 공정 단계를 고치면
-    이 값도 함께 바뀐다. 앞단 공유 설비만 `flow` 값으로 따로 더한다.
+    계산 자체는 `cms_config.planned_equip_load`가 한다. 시뮬레이션의 공유 설비
+    배분도 같은 값을 쓰므로, 진단 표와 시뮬레이션이 같은 기준을 본다.
     """
-    cond, inb = cfg.conductor, cfg.inbound
-    av = cfg.calendar.availability
-    d: dict[str, float] = {}
-
-    def add(key: str, minutes: float) -> None:
-        d[key] = d.get(key, 0.0) + minutes / av
-
-    # ── 앞단(산문 규칙 구간) ──
-    rod_bobbins = inb.cu_trucks_per_month * inb.cu_ton_per_truck / cond.taeshin_bobbin_ton
-    add("taeshin", rod_bobbins * cond.taeshin_min_per_bobbin)
-
-    batches = rod_bobbins * cond.carriers_per_bobbin / cond.multi_carriers_per_batch
-    total_cycle = max(1, cond.cycle_cu44 + cond.cycle_cu19)
-    b44 = batches * cond.cycle_cu44 / total_cycle
-    b19 = batches * cond.cycle_cu19 / total_cycle
-    add("multi", b44 * cond.multi_cu44_min + b19 * cond.multi_cu19_min)
-
-    bobbins19 = b19 * cond.multi_cu19_bobbins
-    add("bunch19", bobbins19 * cond.bunch19_min)
-    add("strand", bobbins19 / 2 * cond.strand19_min)   # 절반만 연선 (SOP 7.2)
-    add("tubular", bobbins19 / 2 * cond.tubular_min)
-
-    add("multi_al", inb.al_days * (inb.al_ton_per_day / 0.2) * cond.multi_al_min)
-
-    # ── 라우팅 구간: 로트가 분할되며 흐르는 대로 따라 걷는다 ──
-    lines = cfg.lines()
-    for key, lots in line_inputs_per_month(cfg).items():
-        line = lines.get(key)
-        if line is None:
-            continue
-        for step in line.steps:
-            lots *= step.split
-            add(step.equip, lots * step.minutes)
-
-    return d
+    return {
+        equip: sum(by_line.values())
+        for equip, by_line in planned_equip_load(cfg).items()
+    }
 
 
 def analyze_cms(m: CmsMetrics, cfg: CmsConfig) -> CmsAnalysis:

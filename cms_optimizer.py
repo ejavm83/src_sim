@@ -29,7 +29,8 @@ DEFAULT_COST: dict[str, float] = {
     "irradiator": 8.0,      # 전자빔 조사기 — 가장 비싼 설비
     "ins_ext": 4.0,
     "sheath_ext": 4.0,
-    "sil_ext": 4.0,
+    "sil_ext_al": 4.0,
+    "sil_ext_cu": 4.0,
     "multi": 3.0,
     "multi_al": 3.0,
     "taeshin": 3.0,

@@ -29,12 +29,14 @@ _EQUIP_BY_SEQ: dict[str, str | dict[str, str]] = {
     "2.4": "strand",
     "2.5": "tubular",
     "3.1": "ins_ext",
-    "3.2": "sil_ext",
+    # 실리콘 압출기는 재질 전용(좌 CU·우 AL)이라 서로 대신 쓸 수 없다 — SOP 6.1·실리콘!C3.
+    # 모델이 도는 물량은 AL 기준 350,000m이므로(질문 #18) 우측 전용기를 쓴다.
+    "3.2": "sil_ext_al",
     "3.3": "irradiator",
     "4.1": {"SIL": "sil_braider", "*": "braider"},
     "4.2": {"SIL": "sil_taping", "*": "taping"},
-    # 실리콘 시스는 절연 압출과 위치가 같아(S2·S3) 같은 압출기를 다시 쓴다 — SOP 2.6·질문 #18
-    "5.1": {"SIL": "sil_ext", "*": "sheath_ext"},
+    # 실리콘 시스는 절연 압출과 위치가 같아(S2·S3) 같은 전용 압출기를 다시 쓴다 — SOP 2.6·질문 #18
+    "5.1": {"SIL": "sil_ext_al", "*": "sheath_ext"},
     "5.2": "irradiator",
     "6.1": {"CU19": "rewind1250", "*": "rewind1050"},
     # 검사도 위치가 갈린다 — E24·E25(Cu·AL) vs S9(실리콘), SOP 2.6
@@ -65,6 +67,17 @@ _EQUIP_BY_LABEL: dict[str, str] = {
     "재권취기(1050φ)": "rewind1050",
     "재권취기(1250φ)": "rewind1250",
     "실리콘 압출기": "sil_ext",
+}
+
+# 한 줄로 적혔지만 실제로는 '서로 대신 못 쓰는' 전용 설비로 갈라야 하는 것.
+# 실리콘 압출기 2대는 좌측이 CU, 우측이 AL 전용이다(SOP 6.1·실리콘!C3). 하나의
+# 풀로 두면 한 재질이 2대를 다 쓸 수 있는 것처럼 능력이 부풀려진다.
+_DEDICATED_SPLIT: dict[str, tuple[tuple[str, str, str, str], ...]] = {
+    # 원본 키 -> ((새 키, 라벨 꼬리, 담당 라인, 설비 식별자), ...)
+    "sil_ext": (
+        ("sil_ext_al", "우 · AL 전용", "SIL", "S2-R"),
+        ("sil_ext_cu", "좌 · CU 전용", "SIL_CU", "S2-L"),
+    ),
 }
 
 # 라우팅 표의 제목 → 라인 키
@@ -233,7 +246,7 @@ def parse_equipment_master(md: str) -> tuple[dict[str, dict[str, Any]], list[str
                 unresolved.append(label)
                 continue
             tbd = count_s.strip().upper() == "TBD"
-            equipment[key] = {
+            base = {
                 "key": key,
                 "label": label,
                 "count": 1 if tbd else int(_num(count_s) or 1),
@@ -241,6 +254,25 @@ def parse_equipment_master(md: str) -> tuple[dict[str, dict[str, Any]], list[str
                 "shared_by": re.findall(r"CU44|CU19|AL16|SIL", shared_s.upper()),
                 "tbd_count": tbd,
             }
+            split = _DEDICATED_SPLIT.get(key)
+            if not split:
+                equipment[key] = base
+                continue
+            # 전용 설비로 분할 — 대수를 나눠 갖는다 (2대 = 좌 1 + 우 1)
+            per = max(1, base["count"] // len(split))
+            for new_key, tail, line, machine_id in split:
+                entry = {
+                    **base,
+                    "key": new_key,
+                    "label": f"{_normalize_equip_label(label)}({tail})",
+                    "count": per,
+                    "shared_by": [line],
+                }
+                if per == 1:
+                    entry["machines"] = [machine_id]
+                    entry["machines_fixed"] = True
+                equipment[new_key] = entry
+            equipment.pop(key, None)
     return equipment, unresolved
 
 
@@ -426,6 +458,8 @@ def assign_machine_ids(
             add(str(step.get("equip")), str(step.get("loc", "")))
 
     for key, spec in equipment.items():
+        if spec.get("machines_fixed"):
+            continue  # 전용 분할처럼 좌/우가 정해진 설비는 위치 코드를 덮어쓰지 않는다
         codes = locs.get(key, [])
         n = max(1, int(spec.get("count", 1)))
         if not codes:
@@ -464,6 +498,10 @@ def spec_from_markdown(md: str, base: dict[str, Any] | None = None) -> tuple[dic
         # base에만 있는 설비(문서가 대수를 안 밝힌 것)는 남겨 둔다.
         merged = {e["key"]: e for e in spec.get("equipment", [])}
         merged.update(equipment)
+        # 전용 설비로 갈라진 옛 통합 키는 버린다 (예: sil_ext -> sil_ext_al/cu)
+        for old_key, split in _DEDICATED_SPLIT.items():
+            if any(new_key in merged for new_key, *_ in split):
+                merged.pop(old_key, None)
         assign_machine_ids(merged, routes or spec.get("routes", {}), flow_locs)
         spec["equipment"] = list(merged.values())
     else:

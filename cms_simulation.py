@@ -22,7 +22,7 @@ from typing import Any
 
 import simpy
 
-from cms_config import CmsConfig, Equipment, Step
+from cms_config import CmsConfig, Equipment, Step, planned_equip_load
 
 ProgressFn = Callable[[float, float], None]
 
@@ -82,14 +82,51 @@ def work(env: simpy.Environment, cal: Calendar, minutes: float):
 
 
 class Pool:
-    """설비 대수만큼의 개별 유닛을 담은 풀. 유닛마다 마지막 생산 품종을 기억한다."""
+    """설비 대수만큼의 개별 유닛을 담은 풀. 유닛마다 마지막 생산 품종을 기억한다.
 
-    def __init__(self, env: simpy.Environment, spec: Equipment) -> None:
+    대기 순서는 **계획 물량에 비례한 몫**으로 정한다(선착순 아님). 각 라인이
+    이 설비에서 이미 쓴 시간을 자기 계획 시간으로 나눈 값이 작은 라인,
+    즉 '자기 몫보다 덜 받은' 라인이 먼저 들어간다. 물량이 큰 라인은 몫이
+    크므로 여전히 많이 쓰지만, 물량이 작은 라인도 자기 몫만큼은 받는다.
+    선착순이면 큰 라인이 낸 로트 뭉치가 줄을 채워 작은 라인이 영영 굶는다.
+    """
+
+    def __init__(
+        self,
+        env: simpy.Environment,
+        spec: Equipment,
+        plan_min: dict[str, float] | None = None,
+    ) -> None:
         self.spec = spec
-        ids = spec.machine_ids()
-        self.store = simpy.Store(env, capacity=len(ids))
-        for i, mid in enumerate(ids):
-            self.store.items.append({"unit": i, "id": mid, "group": None})
+        self.ids = spec.machine_ids()
+        self.res = simpy.PriorityResource(env, capacity=len(self.ids))
+        self.free: list[dict[str, Any]] = [
+            {"unit": i, "id": mid, "group": None} for i, mid in enumerate(self.ids)
+        ]
+        self.plan_min = plan_min or {}
+        self.served_min: dict[str, float] = defaultdict(float)
+
+    def priority(self, group: str) -> float:
+        """작을수록 먼저. '자기 몫 대비 이미 받은 비율'."""
+        share = self.plan_min.get(group, 0.0)
+        if share <= 0:
+            # 계획에 없는 라인(앞단 배치 등)은 덜 쓴 쪽이 먼저 — 굶지 않게만 한다
+            return self.served_min[group]
+        return self.served_min[group] / share
+
+    def take(self, group: str) -> dict[str, Any]:
+        """빈 설비 1대를 고른다. 같은 품종을 마지막에 돌린 설비를 우선 골라
+        불필요한 교체(셋업)를 줄인다 — 실제 작업자도 그렇게 배정한다."""
+        for i, u in enumerate(self.free):
+            if u["group"] == group:
+                return self.free.pop(i)
+        for i, u in enumerate(self.free):
+            if u["group"] is None:
+                return self.free.pop(i)
+        return self.free.pop(0)
+
+    def give(self, unit: dict[str, Any]) -> None:
+        self.free.append(unit)
 
 
 # ── 지표 ──────────────────────────────────────────────────────────────────
@@ -175,7 +212,11 @@ class Plant:
         self.cfg = cfg
         self.m = m
         self.cal = Calendar(cfg)
-        self.pools = {k: Pool(env, spec) for k, spec in cfg.equipment.items()}
+        # 공유 설비를 라인별로 얼마씩 나눠 줄지의 기준 — 진단 표와 같은 계산을 쓴다
+        plan = planned_equip_load(cfg)
+        self.pools = {
+            k: Pool(env, spec, plan.get(k)) for k, spec in cfg.equipment.items()
+        }
         for k, spec in cfg.equipment.items():
             m.equip_label[k] = spec.label
             m.equip_count[k] = max(1, spec.count)
@@ -191,35 +232,45 @@ class Plant:
 
 
 def run_on(plant: Plant, equip: str, group: str, minutes: float, step_label: str = ""):
-    """설비 1대를 잡아 교체(필요 시) 후 `minutes`만큼 가공한다."""
+    """설비 1대를 잡아 교체(필요 시) 후 `minutes`만큼 가공한다.
+
+    설비가 다 차 있으면 여기서 멈춰 기다린다 — 이것이 '설비가 모자라면
+    두 라인이 동시에 못 쓴다'는 제약의 실체다. 기다리는 순서는 `Pool.priority`
+    (계획 물량에 비례한 몫)로 정한다.
+    """
     env, m = plant.env, plant.m
     pool = plant.pools[equip]
 
     t0 = env.now
     m.enqueue(equip)
-    unit = yield pool.store.get()
-    m.dequeue(equip, env.now - t0)
+    with pool.res.request(priority=pool.priority(group)) as req:
+        yield req
+        m.dequeue(equip, env.now - t0)
 
-    mid = (equip, unit["id"])
-    if unit["group"] is not None and unit["group"] != group:
-        setup = pool.spec.setup_min
-        if setup > 0:
-            yield from work(env, plant.cal, setup)
-            eff_setup = setup / plant.cal.availability
-            m.setup_min[equip] += eff_setup
-            m.machine_setup[mid] += eff_setup
-    unit["group"] = group
+        unit = pool.take(group)
+        mid = (equip, unit["id"])
+        try:
+            if unit["group"] is not None and unit["group"] != group:
+                setup = pool.spec.setup_min
+                if setup > 0:
+                    yield from work(env, plant.cal, setup)
+                    eff_setup = setup / plant.cal.availability
+                    m.setup_min[equip] += eff_setup
+                    m.machine_setup[mid] += eff_setup
+                    pool.served_min[group] += eff_setup
+            unit["group"] = group
 
-    yield from work(env, plant.cal, minutes)
-    eff = minutes / plant.cal.availability
-    m.busy_min[equip] += eff
-    m.machine_busy[mid] += eff
-    m.machine_lines[mid].add(group)
-    m.machine_jobs[mid] += 1
-    if step_label:
-        m.step_busy[(equip, step_label)] += eff
-
-    yield pool.store.put(unit)
+            yield from work(env, plant.cal, minutes)
+            eff = minutes / plant.cal.availability
+            m.busy_min[equip] += eff
+            m.machine_busy[mid] += eff
+            m.machine_lines[mid].add(group)
+            m.machine_jobs[mid] += 1
+            pool.served_min[group] += eff
+            if step_label:
+                m.step_busy[(equip, step_label)] += eff
+        finally:
+            pool.give(unit)
 
 
 def run_steps(plant: Plant, lot: dict[str, Any], steps: list[Step], start_at: int = 0):

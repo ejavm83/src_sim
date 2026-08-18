@@ -165,8 +165,18 @@ def render_cms_sidebar(base: CmsConfig | None = None) -> tuple[CmsConfig, bool]:
 
     with st.expander("🔴 실리콘 HV 라인 (도체 공정 없음)"):
         st.caption("SOP 5.4 — 압출 중 가교되어 조사 공정이 없고, 편조가 병목입니다.")
-        eq["sil_ext"] = replace(eq["sil_ext"], count=_count(cfg, "sil_ext", "실리콘 압출기 대수", 12,
-                                                            "좌: CU, 우: AL"))
+        eq["sil_ext_al"] = replace(
+            eq["sil_ext_al"],
+            count=_count(cfg, "sil_ext_al", "실리콘 압출기 (우 · AL 전용)", 12,
+                         "좌·우 압출기는 재질 전용이라 서로 대신 못 씁니다. "
+                         "모델이 도는 350,000m는 AL 물량이라 이쪽만 씁니다."),
+        )
+        eq["sil_ext_cu"] = replace(
+            eq["sil_ext_cu"],
+            count=_count(cfg, "sil_ext_cu", "실리콘 압출기 (좌 · CU 전용)", 12,
+                         "CU 실리콘 월 물량이 SOP에 없어(질문 #18) 지금은 투입이 없습니다. "
+                         "물량이 확인되면 이 설비가 담당합니다."),
+        )
         eq["sil_braider"] = replace(eq["sil_braider"],
                                     count=_count(cfg, "sil_braider", "편조기 대수 (실리콘 S4·S5)", 60))
         eq["sil_taping"] = replace(eq["sil_taping"],

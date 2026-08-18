@@ -284,20 +284,6 @@
       ]
     },
     {
-      "key": "sil_ext",
-      "label": "실리콘 압출기",
-      "count": 2,
-      "setup_min": 60.0,
-      "shared_by": [
-        "SIL"
-      ],
-      "tbd_count": false,
-      "machines": [
-        "S2-1",
-        "S2-2"
-      ]
-    },
-    {
       "key": "sil_braider",
       "label": "편조기(실리콘 S4·S5)",
       "count": 10,
@@ -364,6 +350,34 @@
         "S9-1",
         "S9-2"
       ]
+    },
+    {
+      "key": "sil_ext_al",
+      "label": "실리콘 압출기(우 · AL 전용)",
+      "count": 1,
+      "setup_min": 60.0,
+      "shared_by": [
+        "SIL"
+      ],
+      "tbd_count": false,
+      "machines": [
+        "S2-R"
+      ],
+      "machines_fixed": true
+    },
+    {
+      "key": "sil_ext_cu",
+      "label": "실리콘 압출기(좌 · CU 전용)",
+      "count": 1,
+      "setup_min": 60.0,
+      "shared_by": [
+        "SIL_CU"
+      ],
+      "tbd_count": false,
+      "machines": [
+        "S2-L"
+      ],
+      "machines_fixed": true
     }
   ],
   "routes": {
@@ -609,7 +623,7 @@
         {
           "seq": "3.2",
           "label": "실리콘 압출기(절연 압출)",
-          "equip": "sil_ext",
+          "equip": "sil_ext_al",
           "loc": "S2",
           "minutes": 50.0,
           "split": 5,
@@ -634,7 +648,7 @@
         {
           "seq": "5.1",
           "label": "쉬스 압출(최외곽 자켓)",
-          "equip": "sil_ext",
+          "equip": "sil_ext_al",
           "loc": "S2→S3",
           "minutes": 66.66666666666667,
           "out_len_m": 1000.0
