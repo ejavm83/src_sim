@@ -27,8 +27,12 @@ def bump_spec_nonce() -> None:
 
 
 def _count(cfg: CmsConfig, key: str, label: str, hi: int, help: str = "") -> int:
-    """설비 대수 슬라이더. SOP 미확인 대수는 라벨에 ⚠를 붙인다."""
-    spec = cfg.equipment[key]
+    """설비 대수 슬라이더. SOP 미확인 대수는 라벨에 ⚠를 붙인다.
+
+    사양 파일이 구버전이라 설비가 빠져 있어도 앱이 죽지 않도록
+    코드 내장 기본값으로 물러난다.
+    """
+    spec = cfg.equipment.get(key) or DEFAULT_CMS_CONFIG.equipment[key]
     shown = f"{_TBD} {label}" if spec.tbd_count else label
     tip = help
     if spec.tbd_count:
@@ -61,6 +65,9 @@ def render_cms_sidebar(base: CmsConfig | None = None) -> tuple[CmsConfig, bool]:
     """CMS 파라미터를 그리고 (설정, 실행버튼눌림)을 돌려준다."""
     cfg = base or spec_config()
     eq = {k: replace(v) for k, v in cfg.equipment.items()}
+    # 구버전 사양 파일에 없는 설비는 코드 내장 기본값으로 채운다 (KeyError 방지)
+    for k, v in DEFAULT_CMS_CONFIG.equipment.items():
+        eq.setdefault(k, replace(v))
     cal, inb, cond, pal = cfg.calendar, cfg.inbound, cfg.conductor, cfg.pallet
 
     st.caption("기준 문서: `공정설명260521.md` — 멕시코 CMS 공장 SOP v0.3")
