@@ -11,6 +11,22 @@ streamlit run webapp.py
 
 Windows에서는 `run_web.bat`을 실행해도 됩니다.
 
+## 개발: 앱 버전 자동 갱신
+
+사이드바 상단의 `v0.3.x-generic (날짜 시각)` 표기는 **커밋할 때마다 자동으로**
+패치 번호가 오르고 시각이 갱신됩니다. 클론 후 한 번만 훅을 켜 주세요.
+
+```bash
+git config core.hooksPath .githooks
+```
+
+- 이번 커밋만 건너뛰기: `SKIP_VERSION_BUMP=1 git commit ...`
+- 손으로 올리기: `python scripts/bump_version.py --minor` (또는 `--major`)
+- 병합 커밋에서는 자동으로 건너뜁니다.
+
+훅은 `webapp.py`를 통째로 `git add` 하지 않고 버전 한 줄만 색인에 넣으므로,
+일부러 빼 둔 다른 수정이 커밋에 딸려 들어가지 않습니다.
+
 ## 공정 기본값 (Excel)
 
 `data/` 폴더에 `.xlsx` 공정 설정 파일이 있으면(예: `공정설정값260520.xlsx`), 앱 기동 시 **「설비·공정 확인」** 시트의 **시뮬 현재값** 열을 읽어 `SimulationConfig` 기본값으로 씁니다.  
