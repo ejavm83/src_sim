@@ -14,6 +14,7 @@ from cms_config import DEFAULT_CMS_CONFIG, CmsConfig
 from cms_report import LINE_LABELS, CmsAnalysis, analyze_cms, bottleneck_report
 from cms_simulation import run_cms_simulation
 from views import kpi_pipeline
+from views.bottleneck_cards import render_sim_bottlenecks
 
 _RUN_KEY = "cms_last_run"
 # 다른 탭(프로세스 분석)이 마지막 시뮬레이션 결과를 재사용하기 위한 공개 이름
@@ -148,34 +149,7 @@ def _render_bottlenecks(a: CmsAnalysis, run: dict | None = None) -> None:
 
     rep = bottleneck_report(run["metrics"], run["cfg"], a)
 
-    for row in rep.rows[:6]:
-        if row.load <= 0 and row.jobs == 0:
-            continue
-        tone = {"능력부족": ("#fdeaea", "#d9534f"), "경합": ("#fdf3e3", "#e08b3c")}.get(
-            row.kind, ("#eef6ee", "#3f9e6a")
-        )
-        waits = " · ".join(
-            f"{LINE_LABELS.get(ln, ln)} {h:,.0f}h" for ln, h in row.wait_by_line[:4]
-        ) or "대기 없음"
-        fix = (
-            f"<br><small>🔧 <b>{row.add_needed}대 증설</b>하면 부하 "
-            f"{row.load * 100:.0f}% → {row.load_after * 100:.0f}%</small>"
-            if row.add_needed
-            else ""
-        )
-        st.markdown(
-            f'<div style="background:{tone[0]};border-left:4px solid {tone[1]};'
-            f'border-radius:8px;padding:0.6rem 1rem;margin-bottom:0.5rem;color:#111827">'
-            f'<b>{row.rank}. {row.label}</b> {row.count}대 '
-            f'<span style="background:{tone[1]};color:#fff;border-radius:4px;'
-            f'padding:0 6px;font-size:0.8em">{row.kind}</span>'
-            f'<br><small>🧮 부하 <code>{row.demand_h:,.0f}h ÷ {row.capacity_h:,.0f}h = '
-            f'{row.load * 100:.0f}%</code> · 가동률 {row.utilization * 100:.0f}% · '
-            f'평균 대기 {row.avg_wait_h:.1f}h · 최대 대기열 {row.max_queue}개</small>'
-            f'<br><small>🔀 이 설비를 두고 다툰 라인 <b>{len(row.lines)}개</b> — {waits}</small>'
-            f'{fix}</div>',
-            unsafe_allow_html=True,
-        )
+    render_sim_bottlenecks(rep, LINE_LABELS, top=6)
 
     st.markdown("##### 📉 라인별 계획 대비 실적 — 경합에 밀린 결과")
     st.caption("달성률이 낮은 라인은 대개 공유 설비 앞에서 밀린 쪽입니다.")
@@ -277,8 +251,32 @@ def _render_kpis(a: CmsAnalysis, cfg: CmsConfig) -> None:
     with k1:
         st.metric("총 생산량", f"{a.total_m/1_000_000:.2f}M m")
         with st.popover("🧮 근거", use_container_width=True):
-            st.markdown("**무엇인가요?** 시뮬레이션 기간 동안 재권취(최종 검사)까지 끝난 전선 길이의 합계입니다.")
-            st.markdown("**어떻게 계산했나요?** 라인별 완성 길이를 전부 더합니다.")
+            st.markdown(
+                "**무엇인가요?** 시뮬레이션 기간 동안 마지막 공정(검사)까지 통과해 "
+                "**완제품이 된** 전선 길이의 합계입니다. 공장 안에서 아직 돌고 있는 "
+                "재공(WIP)은 포함하지 않습니다."
+            )
+            st.markdown(
+                "**어떻게 세었나요?** SimPy는 로트가 라우팅의 마지막 단계를 통과할 때마다 "
+                "그 로트의 길이를 더합니다(finished_m). 로트 길이는 SOP 7.3 로트 변환표를 "
+                "따라 공정마다 갈라지며 정해집니다."
+            )
+            st.markdown("**라인별로 나눠 보면**")
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        {
+                            "라인": LINE_LABELS.get(k, k),
+                            "완성 로트": a.finished_lots.get(k, 0),
+                            "생산량(m)": round(v),
+                        }
+                        for k, v in a.finished_m.items()
+                        if v
+                    ]
+                ),
+                hide_index=True,
+                use_container_width=True,
+            )
             parts = [
                 f"{LINE_LABELS.get(key, key)} {m:,.0f}m"
                 for key, m in a.finished_m.items()

@@ -7,6 +7,8 @@ from typing import Any
 
 import streamlit as st
 
+from views.bottleneck_cards import card, mono
+
 _RESULT_KEY = "_domain_analysis_result"
 _SIM_BRIEF_KEY = "_domain_analysis_sim_brief"
 _BTN_KEY = "_domain_analysis_btn"
@@ -295,29 +297,17 @@ def render_page() -> None:
             "문서를 읽어 짐작한 것이 아니라 **SimPy로 공정을 실제로 돌려 본 결과**입니다. "
             "설비 대수·라인 간 경합·대기열처럼 돌려 봐야 알 수 있는 것만 담았습니다."
         )
-        severity_color = {"high": "#fee2e2", "medium": "#fef9c3", "low": "#f0fdf4"}
         for b in bottlenecks:
-            sev = str(b.get("severity", "medium")).lower()
-            color = severity_color.get(sev, "#f8f8f8")
-            border = {"high": "#ef4444", "medium": "#f59e0b", "low": "#22c55e"}.get(sev, "#f59e0b")
             equip = str(b.get("equipment", "")).strip()
-            head = f'{b.get("step", "")}' + (f' · {equip}' if equip else "")
-            parts = [
-                f'<div style="background:{color};border-radius:8px;padding:0.65rem 1rem;'
-                f'margin-bottom:0.5rem;border-left:4px solid {border};">'
-                f'<strong>{head}</strong> — {b.get("issue", "")}'
-            ]
+            head = str(b.get("step", "")) + (f" · {equip}" if equip else "")
+            blocks = [("❓ 무엇이 문제인가", str(b.get("issue", "")))]
             if b.get("evidence"):
-                parts.append(
-                    "<br><span style='font-size:0.9em'>🧮 <b>근거</b> "
-                    f"<code>{b['evidence']}</code></span>"
-                )
+                blocks.append(("🧮 계산 근거 (시뮬레이션 수치)", mono(str(b["evidence"]))))
             if b.get("impact"):
-                parts.append(
-                    f"<br><small style='color:#6b7280'>📉 영향 — {b['impact']}</small>"
-                )
-            parts.append("</div>")
-            st.markdown("".join(parts), unsafe_allow_html=True)
+                blocks.append(("📉 생산에 미친 영향", str(b["impact"])))
+            sev = str(b.get("severity", "medium")).lower()
+            card(head, {"high": "심각", "medium": "주의", "low": "경미"}.get(sev, "주의"),
+                 blocks, kind=sev)
 
         brief = st.session_state.get(_SIM_BRIEF_KEY, "")
         if brief:
